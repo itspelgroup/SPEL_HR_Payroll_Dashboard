@@ -1,0 +1,8 @@
+config.json
+config.ini
+.env
+*.log
+__pycache__/
+.venv/
+*.bak
+*.rar

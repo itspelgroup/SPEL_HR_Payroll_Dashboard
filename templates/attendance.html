@@ -1,0 +1,48 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPEL | Attendance overview</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css', v=3) }}">
+  <script src="{{ url_for('static', filename='dashboard.js', v=3) }}" defer></script>
+</head>
+<body>
+  <header><a class="brand" href="/">SPEL <span>People &amp; operations</span></a><span class="badge">ATTENDANCE</span></header>
+  <main>
+    <div class="heading"><h1>ATTENDANCE OVERVIEW</h1><div class="date">{{ today }}<small>Pakistan time · calendar day</small></div></div>
+    {% if not live %}<aside class="notice"><strong>Sample data</strong> Fictional records for screen review. No database connected; no live attendance or freshness is reported.</aside>{% endif %}
+    {% if error %}
+    <section class="panel error-panel" role="alert"><h2>Attendance data is unavailable</h2><p>Check the local SQL settings, ODBC driver, authentication and server access.</p><p>Retries are limited to one attempt per {{ ttl }} seconds.</p><a class="button-link" href="/">Try again</a></section>
+    {% else %}
+    {% if live %}<aside class="source-status {% if stale %}stale{% endif %}" role="status"><strong>{% if stale %}Refresh failed — showing older data{% else %}SQL attendance data{% endif %}</strong><span>Last read {{ loaded_at }} PKT · {{ age }}s ago</span><small>Shared refresh: {{ ttl }}s. Devices may report late.</small></aside>{% endif %}
+    <form method="get" class="filters">
+      <div><label for="location">Location</label><select id="location" name="location"><option value="">All locations</option>{% for value, text in locations %}<option value="{{ value }}" {% if value == location %}selected{% endif %}>{{ text }}</option>{% endfor %}{% if has_unassigned %}<option value="null" {% if location == 'null' %}selected{% endif %}>Not assigned</option>{% endif %}</select></div>
+      <div><label for="unit">Unit</label><select id="unit" name="unit"><option value="">All units</option>{% for value, text in units %}<option value="{{ value }}" {% if value == unit %}selected{% endif %}>{{ text }}</option>{% endfor %}</select></div>
+      <button type="submit">Apply / refresh</button><a href="/">Reset</a>
+    </form>
+    {% set metrics = [('registered', 'Registered IDs', registered, 'Biometric roster · selected scope'), ('punched', 'Punched today', punched, 'Mapped IDs · selected scope'), ('no-punch', 'No punch recorded', no_punch, 'Does not establish absence'), ('unmapped', 'Unmapped punched IDs', unmapped, 'All locations · outside filtered totals')] %}
+    <section class="metrics" aria-label="Filtered attendance counts">
+      {% for key, title, count, note in metrics %}<button type="button" class="metric-tile {{ key }}" data-detail="{{ key }}" data-title="{{ title }}" aria-haspopup="dialog" aria-controls="employee-details"><span class="tile-top">{{ title }}<span aria-hidden="true">↗</span></span><strong>{{ count }}</strong><small>{{ note }}</small><span class="tile-action">View employees</span></button>{% endfor %}
+    </section>
+    <section aria-labelledby="breakdown-title"><div class="section-heading"><div><h2 id="breakdown-title">Unit breakdown</h2><p>Select a tile to view employee details.</p></div><span>{{ rows|length }} units</span></div>
+      <div class="group-grid">
+      {% for row in rows %}<button type="button" class="group-tile" data-detail="unit" data-unit="{{ token(row.unit) }}" data-title="{{ label(row.unit) }}" aria-haspopup="dialog" aria-controls="employee-details"><span class="tile-top"><span>{{ label(row.unit) }}</span><span aria-hidden="true">↗</span></span><span class="group-count"><b>{{ row.punched }}</b><span> / {{ row.registered }} punched</span></span><span class="progress" aria-hidden="true"><span style="width: {{ (100 * row.punched / row.registered) if row.registered else 0 }}%"></span></span><span class="group-bottom"><span>{{ row.registered - row.punched }} no punch recorded</span><span>Employees</span></span></button>
+      {% else %}<p class="empty">No registered employees match these filters. Try another location or unit.</p>{% endfor %}
+      </div>
+    </section>
+    <p class="coverage-line">All locations: <strong>{{ distinct_ids }}</strong> distinct punched IDs, including <strong>{{ unmapped }}</strong> unmapped. Location follows the employee unit's device mapping; it does not confirm where an employee punched.</p>
+    <dialog id="employee-details" aria-labelledby="detail-title">
+      <div class="dialog-heading"><div><p class="eyebrow">{{ today }} · EMPLOYEE DETAILS</p><h2 id="detail-title">Employee details</h2><p id="detail-scope"></p></div><form method="dialog"><button class="close" aria-label="Close details" autofocus>×</button></form></div>
+      <div class="dialog-body"><div class="detail-toolbar"><label for="detail-search">Search ID or name</label><input id="detail-search" type="search" placeholder="Employee ID or name" autocomplete="off"><span id="detail-count" aria-live="polite"></span></div>
+        <div class="table-scroll employee-scroll"><table><caption class="sr-only">Employees for the selected tile</caption><thead><tr><th scope="col">Employee ID</th><th scope="col">Name</th><th scope="col">Location</th><th scope="col">Unit</th><th scope="col">Department</th><th scope="col">Punch today</th></tr></thead><tbody id="employee-rows"></tbody></table></div>
+        <p class="detail-note">No punch recorded does not establish absence. Names use PName when Name is blank or an obvious placeholder.</p><p class="snapshot-note">{% if live %}{% if stale %}Stale snapshot · {% endif %}Last successful read {{ loaded_at }} PKT.{% else %}Fictional sample data.{% endif %} Details use the same cached snapshot as the tiles.</p>
+      </div>
+    </dialog>
+    <script type="application/json" id="attendance-details">{{ details|tojson }}</script>
+    <script type="application/json" id="unit-options">{{ unit_options|tojson }}</script>
+    <noscript><p>Enable JavaScript to open employee details and update unit choices when location changes.</p></noscript>
+    {% endif %}
+    <footer>Recorded punches do not confirm current presence. Employment status, shifts, holidays and approved leave are not yet integrated.</footer>
+  </main>
+</body>
+</html>

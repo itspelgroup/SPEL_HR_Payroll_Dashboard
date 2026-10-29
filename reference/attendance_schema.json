@@ -1,0 +1,101 @@
+{
+  "captured": "2026-10-29",
+  "database": "SPEL_ATTENDENCE",
+  "schema": "dbo",
+  "notation": "! means NOT NULL; lengths are SQL character lengths, converted from supplied byte lengths. All reported indexes enabled; no filters, included or descending columns. Index names abbreviated except PK descriptions.",
+  "tables": {
+    "ZK_CHECKINOUT": {
+      "approximate_rows": 386954,
+      "columns": [
+        "ID bigint! identity",
+        "USERID nvarchar(50)!",
+        "CHECKTIME datetime!",
+        "CHECKTYPE nvarchar(2)",
+        "VERIFYCODE int",
+        "SENSORID nvarchar(50)",
+        "WorkCode int",
+        "sn nvarchar(100)",
+        "DeviceIP nvarchar(50)",
+        "InsertedAt datetime! default getdate()"
+      ],
+      "indexes": [
+        "PK clustered ID",
+        "IX CheckTime (CHECKTIME)",
+        "IX SensorTime (SENSORID,CHECKTIME)",
+        "IX UserTime (USERID,CHECKTIME)",
+        "UQ UserDevTime (USERID,SENSORID,CHECKTIME)"
+      ]
+    },
+    "zkk_Devices": {
+      "approximate_rows": 14,
+      "columns": [
+        "DeviceCode varchar(50)!",
+        "Name nvarchar(100)!",
+        "IPAddress varchar(45)!",
+        "Port int! default 4370",
+        "Location nvarchar(50)!",
+        "Unit nvarchar(20)",
+        "Model nvarchar(50)",
+        "Password int! default 0",
+        "ForceUDP bit! default 0",
+        "Active bit! default 1",
+        "CreatedAt datetime! default getdate()",
+        "UpdatedAt datetime! default getdate()"
+      ],
+      "indexes": [
+        "PK clustered DeviceCode",
+        "IX Active (Active)",
+        "IX Location (Location)"
+      ]
+    },
+    "zkk_EmployeeDevices": {
+      "approximate_rows": 5173,
+      "columns": [
+        "EmployeeID varchar(50)!",
+        "DeviceCode varchar(50)!",
+        "EnrolledAt datetime! default getdate()",
+        "LastPulledAt datetime",
+        "LastSyncedAt datetime",
+        "Privilege int! default 0"
+      ],
+      "indexes": [
+        "PK clustered (EmployeeID,DeviceCode)",
+        "IX Device (DeviceCode)"
+      ]
+    },
+    "zkk_Employees": {
+      "approximate_rows": 1003,
+      "columns": [
+        "EmployeeID varchar(50)!",
+        "Name nvarchar(100)!",
+        "Privilege int! default 0",
+        "CardNumber varchar(50)",
+        "HasPassword bit! default 0",
+        "GroupID int! default 0",
+        "Unit nvarchar(20)",
+        "PStatus nvarchar(50)",
+        "Department nvarchar(100)",
+        "PName nvarchar(100)",
+        "RetirementDate date",
+        "Active bit! default 1",
+        "PhotoPath nvarchar(500)",
+        "FingerCount int! default 0",
+        "HasFace bit! default 0",
+        "FirstSeenOnDevice varchar(50)",
+        "FirstSeenAt datetime",
+        "LastPulledAt datetime",
+        "LastEditedBy nvarchar(50)",
+        "LastEditedAt datetime",
+        "CreatedAt datetime! default getdate()",
+        "PhysicalLocation nvarchar(100)"
+      ],
+      "indexes": [
+        "PK clustered EmployeeID",
+        "IX Active (Active)",
+        "IX Name (Name)",
+        "IX PStatus (PStatus)",
+        "IX Unit (Unit)"
+      ]
+    }
+  }
+}
