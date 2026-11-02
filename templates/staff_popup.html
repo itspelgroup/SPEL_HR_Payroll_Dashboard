@@ -1,0 +1,20 @@
+{% set alert_mode = staff_mode == 'alerts' %}
+{% set popup_id = 'employee-overview-details' if alert_mode else 'directory-details' %}
+<dialog id="{{ popup_id }}" class="staff-popup" data-staff-mode="{{ staff_mode }}" aria-labelledby="{{ popup_id }}-title">
+  <div class="modal-header"><div><p class="eyebrow">{{ 'ATTENDANCE ALERT DETAILS' if alert_mode else 'ACTIVE EMPLOYEE DIRECTORY' }}</p><h2 id="{{ popup_id }}-title" data-staff-title>Employee details</h2><p class="muted" data-staff-count></p></div><form method="dialog"><button class="close" aria-label="Close details">×</button></form></div>
+  <div class="staff-popup-body">
+    <div class="staff-filters" aria-label="Employee detail filters">
+      {% for key,label in [('unit','Unit'),('department','Department'),('physical','Physical location')] %}
+      <label for="{{ popup_id }}-{{ key }}">{{ label }}<select id="{{ popup_id }}-{{ key }}" data-staff-filter="{{ key }}"><option value="">All</option></select></label>
+      {% endfor %}
+      {% if alert_mode %}<label for="{{ popup_id }}-in-location">IN machine location<select id="{{ popup_id }}-in-location" data-staff-filter="in_location"><option value="">All locations</option></select></label><label for="{{ popup_id }}-reason">Review reason<select id="{{ popup_id }}-reason" data-staff-filter="reason"><option value="">All reasons</option></select></label>{% endif %}
+      <label class="staff-search" for="{{ popup_id }}-search">Search employees<input id="{{ popup_id }}-search" type="search" data-staff-search placeholder="ID, name, PName or any detail" autocomplete="off"></label>
+      <label for="{{ popup_id }}-sort">Sort<select id="{{ popup_id }}-sort" data-staff-sort><option value="name">Name</option><option value="id">Employee ID</option>{% if alert_mode %}<option value="elapsed_seconds">Longest time inside</option>{% endif %}</select></label>
+      <button type="button" class="staff-reset" data-staff-reset>Clear filters</button>
+    </div>
+    <details class="staff-breakdown" data-staff-breakdown><summary>Unit / department counts <span data-staff-breakdown-count></span></summary><div class="staff-breakdown-scroll"><table><thead><tr><th>Unit</th><th>Department</th><th>Employees</th></tr></thead><tbody data-staff-groups></tbody></table></div></details>
+    <div class="punch-scroll staff-records"><table><thead><tr><th>Employee ID</th><th>Name</th>{% if not alert_mode %}<th>PName</th>{% endif %}<th>Unit</th><th>Department</th>{% if alert_mode %}<th>IN / last machine location</th><th>IN datetime · PKT</th><th>Elapsed</th>{% endif %}<th>PhysicalLocation</th>{% if alert_mode %}<th>Review reason</th><th>Last event · PKT</th>{% else %}<th>Status</th>{% endif %}</tr></thead><tbody data-staff-rows></tbody></table></div>
+    <p class="muted">{{ 'Presence is inferred; missed OUT can overstate it and repeated IN can shorten elapsed time.' if alert_mode else 'Active means zkk_Employees.Active = 1, not confirmed payroll employment status.' }} Filters and counts use the same cached records; no extra SQL runs when filtering. Refresh pauses while this popup is open.</p>
+  </div>
+</dialog>
+<script type="application/json" data-staff-source id="{{ 'employee-overview-data' if alert_mode else 'directory-data' }}">{{ details|tojson }}</script>

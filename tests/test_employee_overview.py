@@ -1,0 +1,151 @@
+from datetime import datetime, timedelta
+from dataclasses import replace
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from app import create_app
+from dashboard.attendance import PAKISTAN
+from dashboard.config import ROOT, load_settings
+from dashboard.employees import EmployeeSnapshot, build_employees, direction_from_name, SqlEmployees
+from dashboard.employee_views import normalized_location
+
+
+class EmployeeOverviewTests(unittest.TestCase):
+    def test_direction_uses_complete_machine_name_tokens(self):
+        for name, expected in (('TS-IN-01','IN'), ('TS-OUT-02','OUT'),
+                               (' ts-in-01 ','IN'), ('KHI_OUT_01','OUT'),
+                               ('MAIN-01',None), ('PRINT-01',None),
+                               ('IN-OUT-01',None), ('TS-01',None), (None,None)):
+            with self.subTest(name=name):
+                self.assertEqual(direction_from_name(name),expected)
+
+    def setUp(self):
+        self.now = datetime.now(PAKISTAN)
+        self.devices = (('PAN-IN', 'Pandoki', 'U1'), ('PAN-OUT', 'Pandoki', 'U1'),
+                        ('KHI-IN', 'Karachi', 'U8'))
+        self.directions = {'PAN-IN':'IN', 'PAN-OUT':'OUT', 'KHI-IN':'IN'}
+
+    def people(self, events):
+        return build_employees([('1','Person One',None,'U1','Production','Room 1')],
+                               self.devices, events, self.directions, self.now)
+
+    def test_later_out_removes_inside_state(self):
+        person = self.people([('1',self.now-timedelta(hours=3),'PAN-IN'),
+                              ('1',self.now-timedelta(hours=1),'PAN-OUT')])[0]
+        self.assertIsNone(person.in_time)
+        self.assertFalse(person.unresolved)
+
+    @patch('pyodbc.connect')
+    def test_live_direction_follows_name_not_device_code(self, connect):
+        cursor=connect.return_value.cursor.return_value
+        cursor.fetchone.return_value=('SPEL_ATTENDENCE',2)
+        stamp=self.now-timedelta(minutes=1)
+        cursor.fetchall.side_effect=[
+            [('1','Person One',None,'U1','Production','Pandoki')],
+            [('CODE-OUT-01','Pandoki','U1','TS-IN-01')],
+            [('1',stamp,'CODE-OUT-01')]]
+        settings=load_settings(ROOT/'config.example.ini')
+        settings.set('database','authentication','windows')
+        snapshot=SqlEmployees(settings)(self.now.date())
+        self.assertEqual(snapshot.employees[0].in_time,stamp)
+        self.assertEqual(snapshot.employees[0].in_location,'Pandoki')
+        lower_bound=cursor.execute.call_args_list[-1].args[1]
+        expected=(self.now-timedelta(hours=72)).replace(tzinfo=None)
+        self.assertLess(abs((lower_bound-expected).total_seconds()),5)
+
+    def test_conflicting_ties_unknown_direction_and_future_time_are_unresolved(self):
+        for events in ([('1',self.now,'PAN-IN'),('1',self.now,'PAN-OUT')],
+                       [('1',self.now,'UNKNOWN')],
+                       [('1',self.now+timedelta(minutes=1),'PAN-IN')]):
+            with self.subTest(events=events):
+                person=self.people(events)[0]
+                self.assertTrue(person.unresolved)
+                self.assertIsNone(person.in_time)
+
+    def test_last_in_machine_location_and_elapsed_over_threshold(self):
+        people = self.people([('1',self.now-timedelta(hours=13),'KHI-IN')])
+        app = create_app(ROOT / 'config.example.ini')
+        app.extensions['employee_overview_cache'].loader = lambda day: EmployeeSnapshot(
+            people,self.devices,self.now,day)
+        client=app.test_client()
+        html=client.get('/employees',query_string={'location':'"karachi"'}).text
+        self.assertIn('Person One',html)
+        self.assertIn('13h',html)
+        self.assertIn('Over 12 Hours',html)
+        self.assertIn('"overdue": true',html)
+        self.assertNotIn('Registered employees',html)
+        html=client.get('/employees',query_string={'location':'"pandoki"'}).text
+        data=json.loads(html.split('id="employee-overview-data">',1)[1].split('</script>',1)[0])
+        self.assertEqual(data,[])
+
+    def test_invalid_employee_threshold_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'settings.ini'
+            path.write_text('[employee_overview]\nlong_stay_hours=48\nlookback_hours=48\n',encoding='utf-8')
+            with self.assertRaises(ValueError):
+                create_app(path)
+
+    def test_location_mismatch_excludes_blank_assignments_and_normalizes_case_spaces(self):
+        person = self.people([('1',self.now-timedelta(hours=2),'PAN-IN')])[0]
+        people = (replace(person,id='1',physical_location='  pAnDoKi  '),
+                  replace(person,id='2',physical_location='Karachi'),
+                  replace(person,id='3',physical_location=None))
+        app=create_app(ROOT/'config.example.ini')
+        app.extensions['employee_overview_cache'].loader=lambda day: EmployeeSnapshot(people,self.devices,self.now,day)
+        html=app.test_client().get('/employees').text
+        data=json.loads(html.split('id="employee-overview-data">',1)[1].split('</script>',1)[0])
+        by_id={row['id']:row for row in data}
+        self.assertFalse(by_id['1']['mismatch'])
+        self.assertTrue(by_id['2']['mismatch'])
+        self.assertFalse(by_id['3']['mismatch'])
+        self.assertTrue(by_id['3']['review'])
+        self.assertIn('PhysicalLocation is not assigned',by_id['3']['reason'])
+        self.assertNotIn('Registered employees',html)
+
+    def test_unknown_direction_is_explained_and_not_counted_inside(self):
+        people=self.people([('1',self.now,'UNKNOWN')])
+        app=create_app(ROOT/'config.example.ini')
+        app.extensions['employee_overview_cache'].loader=lambda day: EmployeeSnapshot(people,self.devices,self.now,day)
+        html=app.test_client().get('/employees').text
+        data=json.loads(html.split('id="employee-overview-data">',1)[1].split('</script>',1)[0])
+        self.assertTrue(data[0]['review'])
+        self.assertFalse(data[0]['inside'])
+        self.assertEqual(data[0]['reason'],'Unknown machine direction')
+
+    def test_location_aliases_are_explicit_and_case_whitespace_insensitive(self):
+        self.assertEqual(normalized_location(' Head   Office '),'head office')
+        self.assertEqual(normalized_location(' Head Office ',{'head office':'headoffice'}),'headoffice')
+
+    def test_unit_filters_are_inside_popup_and_do_not_change_main_tile_scope(self):
+        person=self.people([('1',self.now-timedelta(hours=2),'PAN-IN')])[0]
+        people=(replace(person,id='1',name='First employee',unit='U1'),
+                replace(person,id='2',name='Second employee',unit='U2'))
+        app=create_app(ROOT/'config.example.ini')
+        app.extensions['employee_overview_cache'].loader=lambda day: EmployeeSnapshot(people,self.devices,self.now,day)
+        html=app.test_client().get('/employees',query_string={'unit':'U2'}).text
+        data=json.loads(html.split('id="employee-overview-data">',1)[1].split('</script>',1)[0])
+        self.assertEqual([person['id'] for person in data],['1','2'])
+        self.assertIn('data-staff-filter="unit"',html)
+        self.assertIn('From Other Location',html)
+        self.assertIn('Unit / department counts',html)
+        self.assertIn('First employee',html)
+        banner=html.split('<header',1)[1].split('</header>',1)[0]
+        self.assertEqual(banner.count('<select'),1)
+        self.assertNotIn('name="unit"',banner)
+        main_screen=html.split('<dialog',1)[0]
+        self.assertNotIn('data-staff-filter',main_screen)
+        self.assertNotIn('department-panel',main_screen)
+
+    def test_invalid_unit_resets_to_all_units(self):
+        person=self.people([('1',self.now-timedelta(hours=2),'PAN-IN')])[0]
+        app=create_app(ROOT/'config.example.ini')
+        app.extensions['employee_overview_cache'].loader=lambda day: EmployeeSnapshot((person,),self.devices,self.now,day)
+        html=app.test_client().get('/employees',query_string={'unit':'does-not-exist'}).text
+        self.assertIn('Person One',html)
+
+
+if __name__ == '__main__':
+    unittest.main()

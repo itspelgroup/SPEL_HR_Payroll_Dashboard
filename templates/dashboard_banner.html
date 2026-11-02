@@ -1,0 +1,15 @@
+<header class="wall-banner">
+  <a class="brand" href="/">SPEL</a>
+  <nav aria-label="Dashboard tabs">
+    <a href="/?location={{ location|urlencode }}" {% if active_tab == 'machines' %}class="active-tab" aria-current="page"{% endif %}>Machines</a>
+    <a href="/employees?location={{ location|urlencode }}" {% if active_tab == 'alerts' %}class="active-tab" aria-current="page"{% endif %}>Attendance Alerts</a>
+    <a href="/employee-directory?location={{ location|urlencode }}" {% if active_tab == 'directory' %}class="active-tab" aria-current="page"{% endif %}>Employees</a>
+  </nav>
+  <form method="get" id="machine-filters">
+    <label class="sr-only" for="location">Location</label>
+    <select id="location" name="location"><option value="">All locations</option>{% if not error %}{% for value,text in locations %}<option value="{{ value }}" {% if value == location %}selected{% endif %}>{{ text }}</option>{% endfor %}{% endif %}</select>
+  </form>
+  <time id="wall-clock">{{ today }} · PKT</time>
+  {% if not live %}<span class="banner-note">SAMPLE</span>{% endif %}
+  {% if stale %}<span class="banner-note stale">STALE DATA</span>{% endif %}
+</header>

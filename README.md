@@ -1,4 +1,12 @@
 # SPEL HR & Payroll Dashboard
+Latest checkpoint v0.3.0 (2026-11-02): three tabs?Machines, Attendance Alerts and Employees. Staff screens are tile-only with shared filtered popups. Designation and authentication are deferred. See docs/PROJECT_STATE.md for current status; older setup notes below are historical. 49 Python tests and 8 JavaScript checks pass. No deployment or live-query verification is claimed.
+
+Current decision (2026-10-31): authentication is deferred. No sign-in is required by default, including live mode. Location is the baseline scope for all dashboard screens and filters. Retained account support is inactive unless explicitly enabled in local security settings; location selection is currently a filter, not an access restriction.
+
+Machine-only black layout and location accounts: see docs/DASHBOARD_ACCOUNTS.md. Live mode now requires sign-in by default; create an administrator using python -m dashboard.users --username admin --admin before opening the app. Machine popups show the last received user's ID, PName, PhysicalLocation and timestamps. UI, login and query verification are pending locally.
+
+Latest development (2026-10-31): the home page is Machine Overview; employee attendance is at /attendance. Machine activity follows the last database receipt (InsertedAt), with Recent <=60 minutes, Delayed <=1440 minutes, and No recent punches thereafter. Disabled and never-received devices are included. Location summaries count devices from zkk_Devices. sql/dashboard/machine_snapshot.sql is a read-only aggregate cached in one process; production query cost and SQL timestamp timezone still require verification. No connectivity probing is performed. Run python serve.py and open http://127.0.0.1:5000. Offline tests for these changes have not been executed in the assistant environment.
+
 Checkpoint v0.2.0 — 2026-10-29 (Asia/Karachi)
 
 Start with docs/PROJECT_STATE.md. The first attendance dashboard supports sample mode and an opt-in SQL SELECT provider; live integration is not yet verified and no production deployment exists.

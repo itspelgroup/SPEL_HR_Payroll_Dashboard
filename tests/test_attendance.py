@@ -68,11 +68,12 @@ class SqlProviderTests(unittest.TestCase):
         connection = connect.return_value
         cursor = connection.cursor.return_value
         cursor.fetchone.return_value = ('SPEL_ATTENDENCE', 2)
-        cursor.fetchall.return_value = [
+        cursor.fetchall.side_effect = [[
             ('001', 'User001', 'Proper Person', 'UNIT3', None, '001', 'Pandoki'),
             ('001', 'User001', 'Proper Person', 'UNIT3', None, '001', 'PANDOKI'),
             ('002', 'Other Person', None, 'UNIT3', None, None, 'Pandoki'),
-            (None, None, None, None, None, '099', None)]
+            (None, None, None, None, None, '099', None)],
+            [('Pandoki', 'UNIT3'), ('Empty Location', 'UNIT9')]]
         provider = SqlAttendance(load_settings(ROOT / 'config.example.ini'))
         snapshot = provider(date(2026, 10, 29))
         self.assertEqual(snapshot.unmapped, 1)
@@ -84,7 +85,8 @@ class SqlProviderTests(unittest.TestCase):
         self.assertTrue(connect.call_args.kwargs['autocommit'])
         self.assertEqual(connection.timeout, 15)
         calls = cursor.execute.call_args_list
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
+        self.assertIn(('Empty Location', 'UNIT9'), snapshot.device_units)
         self.assertEqual(calls[1].args[1:], (datetime(2026, 10, 29), datetime(2026, 10, 30)))
         connection.close.assert_called_once()
         cursor.close.assert_called_once()
@@ -105,23 +107,23 @@ class LivePageTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.path = Path(self.folder.name) / 'test.ini'
         self.path.write_text('[application]\ndata_mode=live\n[database]\nenabled=true\n'
-                             '[cache]\nenabled=true\n', encoding='utf-8')
+                             '[cache]\nenabled=true\n[security]\nenabled=false\n', encoding='utf-8')
 
     def test_live_filters_use_one_snapshot_and_null_groups_remain_visible(self):
         loader = Mock(side_effect=sample)
         client = create_app(self.path, provider=loader).test_client()
-        html = client.get('/').text
+        html = client.get('/attendance').text
         self.assertIn('SQL attendance data', html)
         self.assertIn('Not assigned', html)
         self.assertNotIn('Sample data', html)
-        html = client.get('/', query_string={'unit': json.dumps(None)}).text
+        html = client.get('/attendance', query_string={'unit': json.dumps(None)}).text
         self.assertIn('<strong>2</strong>', html)
         self.assertIn('<strong>0</strong>', html)
         self.assertEqual(loader.call_count, 1)
 
     def test_failure_does_not_leak_details_or_show_fake_zero_counts(self):
         client = create_app(self.path, provider=Mock(side_effect=RuntimeError('PWD=secret'))).test_client()
-        response = client.get('/')
+        response = client.get('/attendance')
         self.assertEqual(response.status_code, 503)
         self.assertIn(b'Attendance data is unavailable', response.data)
         self.assertNotIn(b'secret', response.data)
@@ -135,7 +137,7 @@ class LivePageTests(unittest.TestCase):
                 Employee('003', 'Third Person', 'UNIT8', None, True, True, ('Karachi',)),
             ], day)
         client = create_app(self.path, provider=loader).test_client()
-        html = client.get('/', query_string={'location': json.dumps('pandoki')}).text
+        html = client.get('/attendance', query_string={'location': json.dumps('pandoki')}).text
         self.assertIn('data-title="UNIT1"', html)
         self.assertIn('data-title="UNIT2"', html)
         self.assertNotIn('data-title="UNIT8"', html)
@@ -144,7 +146,22 @@ class LivePageTests(unittest.TestCase):
         self.assertNotIn('Third Person', html)
         self.assertIn('ATTENDANCE OVERVIEW', html)
         self.assertNotIn('name="department"', html)
-        self.assertIn('<strong>3</strong>', client.get('/').text)
+        self.assertIn('<strong>3</strong>', client.get('/attendance').text)
+
+    def test_device_locations_and_units_include_empty_roster_groups(self):
+        loader = Mock(side_effect=lambda day: make_snapshot([
+            Employee('001', 'First Person', 'UNIT1', None, True, True, ('Pandoki',)),
+        ], day, (('Pandoki', 'UNIT1'), ('Karachi', 'UNIT8'), ('Karachi', 'UNIT9'))))
+        client = create_app(self.path, provider=loader).test_client()
+        html = client.get('/attendance').text
+        self.assertIn('>Karachi</option>', html)
+        html = client.get('/attendance', query_string={'location': json.dumps('karachi')}).text
+        unit_select = html.split('<select id="unit"', 1)[1].split('</select>', 1)[0]
+        self.assertIn('>UNIT8</option>', unit_select)
+        self.assertIn('>UNIT9</option>', unit_select)
+        self.assertNotIn('>UNIT1</option>', unit_select)
+        self.assertIn('No registered employees match', html)
+        self.assertEqual(loader.call_count, 1)
 
     @patch('pyodbc.connect')
     def test_app_startup_does_not_connect(self, connect):

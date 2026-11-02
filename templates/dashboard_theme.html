@@ -1,0 +1,11 @@
+<style>
+:root{--healthy:rgb({{ ui_colors.healthy }});--attention:rgb({{ ui_colors.attention }});--critical:rgb({{ ui_colors.critical }});--information:rgb({{ ui_colors.information }});--surface:rgb(18,23,31);--text-muted:rgb(172,184,201)}
+.direction-in{--direction:rgb({{ ui_colors.direction_in }})}.direction-out{--direction:rgb({{ ui_colors.direction_out }})}.direction-unknown{--direction:var(--attention)}
+.fresh .indicator{color:var(--healthy)}.fresh{border-left-color:var(--healthy)}.delayed .indicator{color:var(--critical)}.delayed{border-left-color:var(--critical)}.fresh-punch{background:rgba({{ ui_colors.healthy }},.09)}.fresh-punch th{color:var(--healthy)}
+.employee-metrics .metric-inside{border-top:3px solid var(--healthy)}.metric-inside strong,.count-inside{color:var(--healthy)}
+.employee-metrics .metric-overdue{border-top:3px solid var(--attention)}.metric-overdue strong,.count-overdue{color:var(--attention)}
+.employee-metrics .metric-mismatch{border-top:3px solid var(--information)}.metric-mismatch strong,.count-mismatch{color:var(--information)}
+.employee-metrics .metric-review{border-top:3px solid var(--critical)}.metric-review strong,.count-review{color:var(--critical)}
+.employee-main button:focus-visible,.wall-tile:focus-visible,select:focus-visible{outline-color:var(--information)}
+.overdue-row{background:rgba({{ ui_colors.attention }},.09)}
+</style>

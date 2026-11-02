@@ -1,4 +1,11 @@
 # Resume here
+## Current checkpoint - 2026-11-02 (v0.3.0)
+The repository now contains three tabs: Machines (/), Attendance Alerts (/employees), and Employees (/employee-directory). Machines are grouped by IN/OUT tokens in zkk_Devices.Name; status uses last CHECKTIME, with green strictly below the configurable recent threshold (default 10 minutes), and popups show the last 15 punches. Attendance Alerts uses a 72-hour latest-event window, last IN machine location, a 12-hour long-stay threshold, assignment mismatches and conservative unresolved-event handling. Employees reads zkk_Employees.Active=1 and uses PhysicalLocation; this is biometric active status, not payroll employment status.
+
+Both staff dashboards are tile-only. Shared popups contain unit/department/location filters, alert review filters, search, sorting and grouped counts. Designation is deferred and removed until requested again. Authentication remains off by default; retained account code is for future activation. All runtime SQL is in sql/dashboard/. All operational refresh/status/history parameters and RGB colours are configured in INI; config.ini is ignored and must stay local.
+
+Git remote is itspelgroup/SPEL_HR_Payroll_Dashboard. This checkpoint is a local code commit; no deployment is claimed. 49 Python tests and 8 JavaScript filtering/grouping checks pass. Live-query performance and visual browser verification remain pending. No database objects/data/settings were modified. Historical notes below describe earlier states and are superseded by this section.
+
 ## Goal and constraints
 Current authorization: user requested actual dashboard data after viewing sample mode. Live SELECT access is now authorized and verified, superseding the earlier temporary no-execution instruction. Object creation, data modification and database-setting changes remain prohibited.
 Latest connection decision (2026-10-29): user permits sa during development, then a read-only user once development is completed. This supersedes the earlier requirement to use a dedicated read-only identity immediately. No tables, views, indexes or other database objects may be created; no existing data may be modified. No database settings changes. Preparation of configuration does not authorize executing SQL here.

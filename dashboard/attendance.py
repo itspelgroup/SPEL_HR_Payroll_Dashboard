@@ -14,6 +14,7 @@ PAKISTAN = timezone(timedelta(hours=5))
 QUERY_DIR = Path(__file__).resolve().parent.parent / 'sql' / 'dashboard'
 PREFLIGHT_SQL = (QUERY_DIR / 'connection_preflight.sql').read_text(encoding='utf-8')
 EMPLOYEE_SQL = (QUERY_DIR / 'employee_snapshot.sql').read_text(encoding='utf-8')
+DEVICE_SQL = (QUERY_DIR / 'device_locations.sql').read_text(encoding='utf-8')
 
 
 @dataclass(frozen=True)
@@ -55,9 +56,10 @@ class Snapshot:
     loaded_at: datetime
     day: object
     employees: tuple = ()
+    device_units: tuple | None = None
 
 
-def make_snapshot(employees, day):
+def make_snapshot(employees, day, device_units=None):
     groups = {}
     for employee in employees:
         if not employee.mapped:
@@ -67,7 +69,7 @@ def make_snapshot(employees, day):
         counts[1] += employee.punched
     return Snapshot(tuple(Group(*key, *counts) for key, counts in groups.items()),
                     sum(not e.mapped for e in employees), datetime.now(PAKISTAN), day,
-                    tuple(employees))
+                    tuple(employees), device_units)
 
 
 class AttendanceUnavailable(Exception):
@@ -123,7 +125,10 @@ class SqlAttendance:
                         records[key]['locations'].setdefault(location.strip().casefold(), location.strip())
                 employees = [Employee(**(record | {'locations': tuple(record['locations'].values())}))
                              for record in records.values()]
-        return make_snapshot(employees, day)
+                cursor.execute(DEVICE_SQL)
+                device_units = tuple((location.strip() if location else None, unit)
+                                     for location, unit in cursor.fetchall())
+        return make_snapshot(employees, day, device_units)
 
 
 class SharedAttendanceCache:
