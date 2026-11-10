@@ -11,7 +11,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
-  flex: 0 0 clamp(170px, 25vh, 250px);
+  flex: 0 0 clamp(200px, 24vh, 260px);
 }
 .employee-metrics button {
   background: linear-gradient(135deg, rgb(26, 35, 47), rgb(16, 23, 32));
@@ -30,10 +30,47 @@
 .employee-metrics strong { font-size: clamp(48px, 4.2vw, 82px); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
 .employee-metrics small { font-size: 12px; font-weight: 400; color: rgb(165, 183, 206); line-height: 1.4; }
 .employee-metrics button:hover { filter: brightness(1.08); }
+.attendance-breakdowns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.attendance-breakdown {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(52, 68, 89);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgb(20, 29, 41), rgb(14, 21, 30));
+}
+.attendance-breakdown h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgb(52, 68, 89);
+  color: rgb(224, 236, 252);
+  font-size: clamp(20px, 1.5vw, 26px);
+}
+.attendance-breakdown h2 small { color: rgb(145, 167, 197); font-size: 14px; font-weight: 400; white-space: nowrap; }
+.attendance-breakdown-scroll { min-height: 0; overflow: auto; }
+.attendance-breakdown table { width: 100%; border-collapse: collapse; font-size: 19px; }
+.attendance-breakdown th,.attendance-breakdown td { padding: 11px 14px; border-bottom: 1px solid rgb(38, 51, 69); text-align: left; }
+.attendance-breakdown thead th { position: sticky; top: 0; background: rgb(21, 31, 44); color: rgb(148, 181, 222); }
+.attendance-breakdown tbody th { color: rgb(208, 222, 241); font-weight: 500; }
+.attendance-breakdown td { width: 1%; color: rgb(118, 220, 174); font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
 .employee-footnote { margin: 0; font-size: 10px; line-height: 1.4; color: rgb(129, 151, 181); }
 @media (max-width: 1000px) {
   .employee-main { padding: 12px; gap: 12px; }
-  .employee-metrics { gap: 10px; flex-basis: clamp(150px, 24vh, 220px); }
+  .employee-metrics { gap: 10px; flex-basis: clamp(140px, 20vh, 190px); }
+  .attendance-breakdowns { gap: 8px; }
+  .attendance-breakdown h2 { padding: 10px; }
+  .attendance-breakdown th,.attendance-breakdown td { padding: 8px 9px; font-size: 16px; }
   .employee-metrics button { padding: 16px; }
   .employee-metrics button > span { font-size: 16px; }
   .employee-metrics strong { font-size: 50px; }
@@ -41,7 +78,9 @@
 }
 @media (max-width: 650px) {
   .employee-main { padding: 8px; gap: 8px; }
-  .employee-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); flex-basis: 220px; gap: 8px; }
+  .employee-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); flex-basis: 180px; gap: 8px; }
+  .attendance-breakdowns { grid-template-columns: 1fr; overflow: auto; }
+  .attendance-breakdown { min-height: 160px; }
   .employee-metrics button { padding: 12px; gap: 4px; }
   .employee-metrics button > span { font-size: 14px; }
   .employee-metrics strong { font-size: 36px; }

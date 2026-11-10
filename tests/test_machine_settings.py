@@ -6,6 +6,12 @@ from app import create_app
 
 
 class MachineSettingsTests(unittest.TestCase):
+    def test_server_thread_count_is_configurable_and_bounded(self):
+        app = self.app_with('[server]\nthreads=12\n')
+        self.assertEqual(app.config['SPEL_THREADS'], 12)
+        with self.assertRaises(ValueError):
+            self.app_with('[server]\nthreads=0\n')
+
     def app_with(self, text):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)

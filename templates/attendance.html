@@ -35,7 +35,7 @@
       <div class="dialog-heading"><div><p class="eyebrow">{{ today }} · EMPLOYEE DETAILS</p><h2 id="detail-title">Employee details</h2><p id="detail-scope"></p></div><form method="dialog"><button class="close" aria-label="Close details" autofocus>×</button></form></div>
       <div class="dialog-body"><div class="detail-toolbar"><label for="detail-search">Search ID or name</label><input id="detail-search" type="search" placeholder="Employee ID or name" autocomplete="off"><span id="detail-count" aria-live="polite"></span></div>
         <div class="table-scroll employee-scroll"><table><caption class="sr-only">Employees for the selected tile</caption><thead><tr><th scope="col">Employee ID</th><th scope="col">Name</th><th scope="col">Location</th><th scope="col">Unit</th><th scope="col">Department</th><th scope="col">Punch today</th></tr></thead><tbody id="employee-rows"></tbody></table></div>
-        <p class="detail-note">No punch recorded does not establish absence. Names use PName when Name is blank or an obvious placeholder.</p><p class="snapshot-note">{% if live %}{% if stale %}Stale snapshot · {% endif %}Last successful read {{ loaded_at }} PKT.{% else %}Fictional sample data.{% endif %} Details use the same cached snapshot as the tiles.</p>
+        <p class="detail-note">No punch recorded does not establish absence. Employee names use zkk_Employees.PName.</p><p class="snapshot-note">{% if live %}{% if stale %}Stale snapshot · {% endif %}Last successful read {{ loaded_at }} PKT.{% else %}Fictional sample data.{% endif %} Details use the same cached snapshot as the tiles.</p>
       </div>
     </dialog>
     <script type="application/json" id="attendance-details">{{ details|tojson }}</script>

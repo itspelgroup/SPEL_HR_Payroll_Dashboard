@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" class="hr-scroll-root"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPEL | HR Hours</title>
+<link rel="stylesheet" href="{{ url_for('static',filename='machine-wall.css',v=2) }}">
+<link rel="stylesheet" href="{{ url_for('static',filename='dashboard-layout.css',v=2) }}">
+<link rel="stylesheet" href="{{ url_for('static',filename='hr-hours.css',v=7) }}">
+{% include 'dashboard_theme.html' %}
+<script src="{{ url_for('static',filename='machines.js',v=8) }}" defer></script>
+<script src="{{ url_for('static',filename='hr-hours.js',v=2) }}" defer></script></head>
+<body class="hr-page" data-refresh-seconds="{{ ttl }}">{% include 'dashboard_banner.html' %}
+<main class="hr-main">
+  <div class="hr-heading"><div><p class="eyebrow">SBO_AI / WORKFORCE ANALYTICS</p><h1>HR HOURS</h1><p>Net working hours, overtime and total working hours by employee and day.</p></div>{% if not error %}<div class="hr-freshness">{% if stale %}<strong>Refresh failed · cached data</strong>{% endif %}<span>Last read {{ loaded_at }} PKT</span><small>Shared refresh {{ ttl }}s</small></div>{% endif %}</div>
+  <nav class="hr-analysis" aria-label="Hours analysis"><a href="/hr-hours?analysis=monthly">Month to month</a><a href="/hr-hours?analysis=yearly">Fiscal year to year</a><a href="/hr-hours?analysis=daily" aria-current="page">Employee / daily details</a></nav>
+  <form method="get" class="hr-filters" aria-label="HR hours filters"><input type="hidden" name="analysis" value="daily">
+    <label>From<input name="start" type="date" value="{{ start }}" required></label>
+    <label>To<input name="end" type="date" value="{{ end }}" required></label>
+    {% for key,title in [('unit','Unit'),('department','Department'),('worker','Worker type'),('direct','DirectWorker')] %}
+    <label>{{ title }}<select name="{{ key }}"><option value="">All</option>{% if options is defined %}{% for value,label in options[key] %}<option value="{{ value }}" {% if filters[key] == value %}selected{% endif %}>{{ label }}</option>{% endfor %}{% endif %}</select></label>
+    {% endfor %}<button type="submit">Apply filters</button><a href="/hr-hours">Reset</a>
+  </form>
+  {% if error %}<section class="hr-error" role="alert"><h2>HR hours could not be loaded</h2><p>{{ error }}</p><p>No partial totals are displayed. Select a shorter period and retry.</p></section>
+  {% else %}
+  <div class="hr-scope"><span>{{ start }} — {{ end }} · {{ '{:,}'.format(summary.records) }} source records</span><span>HR_MIS + HR_MIS_C · {% if not live %}Fictional sample data{% else %}Read-only snapshot{% endif %}</span></div>
+  {% set metrics = [('total','Total working hours',fmt(summary.total),'Net working hours + overtime hours','information'),('net','Net working hours',fmt(summary.net),'Working hours excluding overtime','healthy'),('overtime','Overtime hours',fmt(summary.overtime),'Signed OvertimeAdjustment_D · hours','attention'),('employees','Employees represented','{:,}'.format(summary.employees),'Distinct nonblank SPELID values','information'),('ratio','OT share of total',fmt(summary.ot_share) ~ '%','Overtime ÷ total hours × 100','attention'),('review','Records to review','{:,}'.format(summary.review),'Missing values, unusual hours or repeated keys','critical')] %}
+  <section class="hr-metrics" aria-label="HR hours insights">
+    {% for kind,title,value,note,color in metrics %}<button type="button" class="hr-tile {{ color }}" data-hr-kind="{{ kind }}" data-title="{{ title }}" aria-haspopup="dialog" aria-controls="hr-details"><span>{{ title }}<span aria-hidden="true">↗</span></span><strong>{{ value }}</strong><small>{{ note }}</small></button>{% endfor %}
+  </section>
+  <section class="hr-explore" aria-labelledby="hr-explore-title"><h2 id="hr-explore-title">Explore the hours</h2><div class="hr-dimensions">
+    {% for key,title in [('unit','Units'),('department','Departments'),('worker','Worker types'),('date','Working dates')] %}<button type="button" data-hr-group="{{ key }}" data-title="Hours by {{ title|lower }}" aria-haspopup="dialog" aria-controls="hr-details"><span>{{ title }}</span><strong>{{ breakdowns[key]|length }}</strong><small>Net hours · OT · employee counts ↗</small></button>{% endfor %}
+  </div></section>
+  <section class="hr-trend"><div class="hr-section-heading"><h2>Daily hours</h2><div><span class="legend-net">● Net working</span><span class="legend-ot">● Overtime</span><span class="legend-total">● Total</span></div></div>
+    {% set max_net = breakdowns.date|map(attribute='net')|map('abs')|max if breakdowns.date else 0 %}
+    {% set max_ot = breakdowns.date|map(attribute='overtime')|map('abs')|max if breakdowns.date else 0 %}
+    {% set max_total = breakdowns.date|map(attribute='total')|map('abs')|max if breakdowns.date else 0 %}
+    {% set scale = [max_net,max_ot,max_total,1]|max %}
+    {% for row in breakdowns.date %}<button type="button" class="hr-day" data-hr-date="{{ row.label }}" data-title="Hours on {{ row.label }}" aria-haspopup="dialog" aria-controls="hr-details"><time>{{ row.label }}</time><span class="hr-bars" aria-hidden="true"><i class="net-bar {% if row.net < 0 %}negative{% endif %}" style="width:{{ row.net|abs / scale * 100 }}%"></i><i class="ot-bar {% if row.overtime < 0 %}negative{% endif %}" style="width:{{ row.overtime|abs / scale * 100 }}%"></i><i class="total-bar {% if row.total < 0 %}negative{% endif %}" style="width:{{ row.total|abs / scale * 100 }}%"></i></span><span class="hr-day-values"><b>{{ fmt(row.total) }} total</b><small>{{ fmt(row.net) }} net · {{ fmt(row.overtime) }} OT</small></span></button>
+    {% else %}<p class="hr-empty">No records for this period and filter selection.</p>{% endfor %}
+  </section>
+  <p class="hr-note">Net working hours exclude overtime. Total working hours = net working hours + overtime hours. Combined UNION ALL records are retained; review flags do not remove their hours. Employee names use EmpName.</p>
+  <dialog id="hr-details" aria-labelledby="hr-detail-title"><div class="modal-header"><div><p class="eyebrow">HR HOURS · {{ start }} — {{ end }}</p><h2 id="hr-detail-title">Hours details</h2><p class="muted" id="hr-detail-count"></p></div><form method="dialog"><button class="close" aria-label="Close HR details" autofocus>×</button></form></div>
+    <div class="hr-popup-body"><div class="hr-popup-controls"><label>Search<input type="search" id="hr-search" placeholder="Employee ID, name, unit, date…" autocomplete="off"></label><label>View<select id="hr-view"><option value="records">Source records</option><option value="employee">Employee totals</option><option value="unit">Unit totals</option><option value="department">Department totals</option><option value="worker">Worker type totals</option><option value="date">Daily totals</option></select></label></div>
+    <div class="hr-detail-table"><table><caption class="sr-only">Filtered hours and overtime details</caption><thead id="hr-detail-head"></thead><tbody id="hr-detail-rows"></tbody></table></div><button type="button" id="hr-more" hidden>Show 100 more</button><p class="hr-note">Popup filters use this same cached snapshot. Missing IDs are excluded from employee headcounts. Repeated employee/day keys need review; split shifts can be valid. No source rows are silently removed.</p></div>
+  </dialog>
+  <script type="application/json" id="hr-hours-data">{{ details|tojson }}</script>
+  <noscript><p>Enable JavaScript to open insight details. Tiles above show the full selected totals.</p></noscript>
+  {% endif %}
+</main></body></html>

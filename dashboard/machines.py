@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 import csv
 
-from dashboard.attendance import PAKISTAN, PREFLIGHT_SQL, QUERY_DIR, AttendanceUnavailable
+from dashboard.attendance import PAKISTAN, PREFLIGHT_SQL, QUERY_DIR, AttendanceUnavailable, display_name
 from dashboard.config import ROOT, build_connection_string
 
 MACHINE_SQL = (QUERY_DIR / 'machine_snapshot.sql').read_text(encoding='utf-8')
@@ -103,7 +103,7 @@ class SqlMachines:
                 history = {}
                 for code, event_id, user_id, punch_time, received_at, pname, unit, physical in cursor.fetchall():
                     history.setdefault(code, []).append(MachinePunch(
-                        event_id, str(user_id), punch_time, received_at, pname, unit, physical))
+                        event_id, str(user_id), punch_time, received_at, display_name(pname), unit, physical))
                 machines = tuple(replace(machine, punches=tuple(history.get(machine.code, ())))
                                  for machine in machines)
         return MachineSnapshot(machines, datetime.now(PAKISTAN), day)

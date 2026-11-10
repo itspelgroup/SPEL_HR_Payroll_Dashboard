@@ -36,6 +36,9 @@ class OverviewEmployee:
     last_event_time: datetime | None = None
     last_event_location: str | None = None
     last_event_locations: tuple = ()
+    branch_name: str | None = None
+    last_in_time: datetime | None = None
+    last_out_time: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -58,10 +61,24 @@ def build_employees(roster, devices, events, directions, now):
         if location and location.strip():
             unit_locations.setdefault(unit, {})[location.strip().casefold()] = location.strip()
     latest = {}
-    for user_id, punch_time, sensor in events:
-        latest.setdefault(str(user_id).strip(), []).append((local_time(punch_time), str(sensor or '').strip().casefold()))
+    punch_times = {}
+    for event in events:
+        user_id, punch_time, sensor = event[:3]
+        user_id = str(user_id).strip()
+        latest.setdefault(user_id, []).append((local_time(punch_time), str(sensor or '').strip().casefold()))
+        if len(event) >= 5:
+            last_in, last_out = event[3:5]
+            values = punch_times.setdefault(user_id, [None, None])
+            if last_in is not None:
+                last_in = local_time(last_in)
+                values[0] = max(values[0], last_in) if values[0] else last_in
+            if last_out is not None:
+                last_out = local_time(last_out)
+                values[1] = max(values[1], last_out) if values[1] else last_out
     result = []
-    for user_id, name, pname, unit, department, physical in roster:
+    for employee in roster:
+        user_id, pname, unit, department, physical = employee[:5]
+        branch_name = employee[5] if len(employee) > 5 else None
         user_id = str(user_id).strip()
         entries = latest.get(user_id, [])
         in_time = in_location = None
@@ -94,9 +111,13 @@ def build_employees(roster, devices, events, directions, now):
                     reason = 'Missing or conflicting IN machine location'
             else:
                 reason = 'Latest punch is OUT'
-        result.append(OverviewEmployee(user_id, display_name(user_id, name, pname), unit,
+        calculated_in = max((time for time, sensor in entries if directions.get(sensor) == 'IN'), default=None)
+        calculated_out = max((time for time, sensor in entries if directions.get(sensor) == 'OUT'), default=None)
+        last_in, last_out = punch_times.get(user_id, (calculated_in, calculated_out))
+        result.append(OverviewEmployee(user_id, display_name(pname), unit,
                       department, physical, tuple(unit_locations.get(unit, {}).values()),
-                      in_time, in_location, unresolved, reason, stamp, last_location, event_locations))
+                      in_time, in_location, unresolved, reason, stamp, last_location, event_locations,
+                      branch_name, last_in, last_out))
     return tuple(result)
 
 
@@ -108,7 +129,8 @@ def demo_employees(day):
         stamp = now - timedelta(hours=(2 if index % 2 else 14)) if index % 3 else None
         people.append(OverviewEmployee(person.id, person.name, person.unit,
                       person.department, None, person.locations, stamp,
-                      person.locations[0] if stamp and person.locations else None))
+                      person.locations[0] if stamp and person.locations else None,
+                      last_in_time=stamp))
     with (ROOT / 'reference' / 'devices.csv').open(encoding='utf-8-sig', newline='') as source:
         devices = tuple((row['DeviceCode'], row['Location'], row['Unit']) for row in csv.DictReader(source))
     return EmployeeSnapshot(tuple(people), devices, now, day)
@@ -138,7 +160,7 @@ class SqlEmployees:
                 devices = tuple((code, location, unit) for code, location, unit, name in device_records)
                 directions = {str(code): direction_from_name(name)
                               for code, location, unit, name in device_records}
-                cursor.execute(EVENTS_SQL, start)
+                cursor.execute(EVENTS_SQL, start, now.replace(tzinfo=None))
                 events = cursor.fetchall()
         people = build_employees(roster, devices, events, directions, now)
         return EmployeeSnapshot(people, devices, datetime.now(PAKISTAN), day)

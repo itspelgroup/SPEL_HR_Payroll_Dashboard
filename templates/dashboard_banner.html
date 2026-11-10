@@ -1,14 +1,16 @@
 <header class="wall-banner">
   <a class="brand" href="/">SPEL</a>
   <nav aria-label="Dashboard tabs">
-    <a href="/?location={{ location|urlencode }}" {% if active_tab == 'machines' %}class="active-tab" aria-current="page"{% endif %}>Machines</a>
-    <a href="/employees?location={{ location|urlencode }}" {% if active_tab == 'alerts' %}class="active-tab" aria-current="page"{% endif %}>Attendance Alerts</a>
-    <a href="/employee-directory?location={{ location|urlencode }}" {% if active_tab == 'directory' %}class="active-tab" aria-current="page"{% endif %}>Employees</a>
+    {% if can_view_tab("machines") %}<a href="/?location={{ location|urlencode }}" {% if active_tab == 'machines' %}class="active-tab" aria-current="page"{% endif %}>Machines</a>{% endif %}
+    {% if can_view_tab("alerts") %}<a href="/employees?location={{ location|urlencode }}" {% if active_tab == 'alerts' %}class="active-tab" aria-current="page"{% endif %}>Attendance Alerts</a>{% endif %}
+    {% if can_view_tab("directory") %}<a href="/employee-directory?location={{ location|urlencode }}" {% if active_tab == 'directory' %}class="active-tab" aria-current="page"{% endif %}>Employees</a>{% endif %}
+    {% if can_view_tab("hr_hours") %}<a href="/hr-hours" {% if active_tab == 'hr_hours' %}class="active-tab" aria-current="page"{% endif %}>HR Hours</a>{% endif %}
+    {% if dashboard_user %}{% if dashboard_user.is_admin %}<a href="/settings">Settings</a>{% endif %}<a href="/account" class="account-link" title="{{ dashboard_user.username }}">{{ dashboard_user.username }}</a><form method="post" action="/logout" class="sign-out"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button type="submit">Sign out</button></form>{% endif %}
   </nav>
-  <form method="get" id="machine-filters">
+  {% if active_tab != 'hr_hours' %}<form method="get" id="machine-filters">
     <label class="sr-only" for="location">Location</label>
     <select id="location" name="location"><option value="">All locations</option>{% if not error %}{% for value,text in locations %}<option value="{{ value }}" {% if value == location %}selected{% endif %}>{{ text }}</option>{% endfor %}{% endif %}</select>
-  </form>
+  </form>{% endif %}
   <time id="wall-clock">{{ today }} · PKT</time>
   {% if not live %}<span class="banner-note">SAMPLE</span>{% endif %}
   {% if stale %}<span class="banner-note stale">STALE DATA</span>{% endif %}

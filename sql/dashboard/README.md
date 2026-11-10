@@ -1,5 +1,44 @@
 # Dashboard query catalog
 
+## HR Hours (SBO_AI)
+
+CURRENT fixed scopes: Monthly loads prior FY July through today and pairs
+matching current/prior FY months. Yearly loads all SQL datetime history
+(1753-01-01 through today), derives the earliest available FY and includes every
+FY through current YTD. No arbitrary year cutoff or Source filter. The same
+hr_hours_periods.sql aggregate and max-group guard serve both scopes, with
+separate shared window caches. All three working/OT/total values are displayed;
+only working and OT are stacked. See docs/HR_HOURS.md; older catalog notes below
+describe earlier UI versions.
+
+Current graph grouping is fiscal July–June. Existing monthly SQL groups roll up
+to FY totals in dashboard/hr_comparison.py; no additional runtime query is needed.
+One bar stacks net and OT with total separately labelled (not added a second
+time). Future query dates are clipped to today; selected fiscal ranges still show
+all July–June categories. Source/month/group caps and shared caching are retained.
+
+Current monthly/yearly query: **hr_hours_periods.sql**, parameters max_groups+1,
+start/end-exclusive repeated for both UNION ALL branches. Aggregates by calendar
+month/unit/department/worker/direct in SQL; yearly totals roll up these groups.
+Supplies net, OT, total working hours graphs, period comparisons and aggregate
+popups. Total = NetWorkingHours_D + OvertimeAdjustment_D as confirmed by user.
+No Source filter; all source rows stay combined. Long-range views share one
+bounded aggregate cache per date window. hr_hours_records.sql remains the
+31-day employee-detail provider, reached from monthly detail links. No new
+database objects or per-tile polling. See docs/HR_HOURS.md.
+
+| Query | Used by | Parameters |
+| --- | --- | --- |
+| hr_hours_preflight.sql | HR access/isolation validation | None |
+| hr_hours_records.sql | All HR Hours tiles, filters, daily chart, employee and grouped popups | max_rows+1; start/end-exclusive repeated for both UNION ALL branches |
+
+One bounded date-window cache supplies all HR views. Signed adjustments and
+repeated source rows remain included. Tiles show net hours, OT adjustment,
+distinct employees, employees with positive OT, OT per 100 net hours and review
+records. Unit/department/worker/date groupings reuse those rows. See
+docs/HR_HOURS.md for definitions and query evaluation. HR names use EmpName;
+existing biometric displays use PName.
+
 Runtime SQL lives in this folder. No SQL is embedded in the Python provider.
 All files are read-only SELECTs; no migrations or automatic SQL-file execution.
 
@@ -13,6 +52,18 @@ All files are read-only SELECTs; no migrations or automatic SQL-file execution.
 These views deliberately reuse one shared employee snapshot. They do not each
 send a separate SQL query, and opening/searching a popup does not contact SQL.
 The provider deduplicates employees and unit-location rows before counting.
+
+Attendance Alerts uses **employee_latest_events.sql** for the latest punch
+event(s) per employee and last IN/OUT timestamps over the configured 96-hour
+window. It classifies the bounded rows once and uses window aggregates to avoid
+the former repeated aggregation/join of the punch CTE. The CHECKTIME range stays
+sargable, and ties at the latest timestamp are preserved. **employee_roster.sql** also reads `BranchName` from
+`zkk_Employees_Payroll`. Python resolves tied latest events, applies the
+employee-unit location mapping, and creates the four tile counts: resolved
+In Premises, over-12-hour, other-location, and guest. The latter three are
+subsets of resolved In Premises employees. The In Premises popup groups the
+same selected-location employees independently by branch, unit, and department.
+Counts are inferred presence, not an authoritative physical headcount.
 
 | Tile or view | Snapshot selection / calculation | Implementation |
 | --- | --- | --- |

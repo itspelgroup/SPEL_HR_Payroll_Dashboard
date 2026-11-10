@@ -1,4 +1,19 @@
 # SPEL HR & Payroll Dashboard
+
+Multi-user access (2026-11-07): local authentication is now enabled. Restart `python serve.py`, sign in with the existing administrator, and open **Settings** to create users with multiple allowed tabs and locations. Private `users.ini` holds the accounts; new/reset passwords are readable as requested, with optional hash storage. HR access requires explicit location-to-HR-unit mappings. Use one central server for all locations/users. See [account setup and deployment](docs/DASHBOARD_ACCOUNTS.md). No production SQL was executed for this increment. Older authentication-deferred notes below are superseded.
+
+For a Windows LAN sample deployment, run `start-lan.bat` on the server and, from elevated PowerShell, optionally run `.\allow-lan-firewall.ps1`; clients open `http://SERVER-IP:5000`. Before exposing real data, enable authentication and configure a read-only SQL account. See [LAN deployment](docs/DEPLOY_LAN.md) for the full setup and HTTPS guidance.
+
+Current HR Hours view is simplified: Monthly pairs the current FY with the previous FY month by month (July-June); Yearly shows every available FY plus current YTD. Each bar shows working, overtime and total values. Optional filters are collapsed; only three YTD tiles remain. See docs/HR_HOURS.md and restart python serve.py / Ctrl+F5 after updating.
+
+HR graphs now compare July–June fiscal years and months. Select first/last FY; each period has one stacked net-plus-overtime bar with total marked above it, a legend and named axes. Current FY is partial and future months are Upcoming. Restart python serve.py and Ctrl+F5 for the updated graph.
+
+HR Hours now opens Monthly analysis by default, with Yearly comparisons and Employee/Daily detail tabs. Graphs compare net, overtime and total hours; total = net + overtime. Source filtering is removed. Long periods use compact SQL aggregates with shared caching. Restart python serve.py and Ctrl+F5 after updating. Details: docs/HR_HOURS.md.
+
+HR Hours tab (2026-11-07): `/hr-hours` adds bounded SBO_AI HR_MIS/HR_MIS_C net-hours and overtime analysis, employee/unit/department/worker/date insights and cached detail popups. Restart `python serve.py` and hard-refresh to see the fourth tab. See docs/HR_HOURS.md for query evaluation, performance and validation notes.
+
+HR/Payroll source decision (2026-11-07): build upcoming HR and Payroll dashboards from SBO_AI. Existing attendance dashboards continue reading SPEL_ATTENDENCE. First inventory SBO_AI tables/views and relationships using read-only metadata queries; its schema is not yet confirmed. See docs/PROJECT_STATE.md.
+
 Latest checkpoint v0.3.0 (2026-11-02): three tabs?Machines, Attendance Alerts and Employees. Staff screens are tile-only with shared filtered popups. Designation and authentication are deferred. See docs/PROJECT_STATE.md for current status; older setup notes below are historical. 49 Python tests and 8 JavaScript checks pass. No deployment or live-query verification is claimed.
 
 Current decision (2026-10-31): authentication is deferred. No sign-in is required by default, including live mode. Location is the baseline scope for all dashboard screens and filters. Retained account support is inactive unless explicitly enabled in local security settings; location selection is currently a filter, not an access restriction.

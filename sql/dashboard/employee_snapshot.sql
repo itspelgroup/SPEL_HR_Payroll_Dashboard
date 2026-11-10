@@ -12,7 +12,7 @@
     SELECT DISTINCT Unit, Location FROM dbo.zkk_Devices
     WHERE Unit IS NOT NULL
 )
-SELECT e.EmployeeID, e.Name, e.PName, e.Unit, e.Department,
+SELECT e.EmployeeID, e.PName, e.Unit, e.Department,
        p.USERID AS PunchedId, d.Location
 FROM dbo.zkk_Employees AS e
 FULL OUTER JOIN TodayIds AS p

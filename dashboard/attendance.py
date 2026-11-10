@@ -3,7 +3,6 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
-import re
 from threading import Lock
 from time import monotonic
 
@@ -36,17 +35,9 @@ class Employee:
     locations: tuple = ()
 
 
-def display_name(employee_id, name, pname):
-    def proper(value):
-        value = (value or '').strip()
-        if not value or value.casefold() in {'null', 'none', 'unknown', 'n/a', 'na', '-', 'employee', 'user'}:
-            return False
-        if value.casefold() == employee_id.strip().casefold():
-            return False
-        if re.fullmatch(r'(user|employee|emp)[\s_-]*\d+', value, re.I):
-            return False
-        return any(character.isalpha() for character in value)
-    return next((value.strip() for value in (name, pname) if proper(value)), 'Name unavailable')
+def display_name(value):
+    """Display canonical employee PName (or payroll Name), with no biometric fallback."""
+    return (value or '').strip() or 'Name unavailable'
 
 
 @dataclass(frozen=True)
@@ -110,12 +101,12 @@ class SqlAttendance:
                     raise AttendanceUnavailable('Unexpected database or session isolation.')
                 cursor.execute(EMPLOYEE_SQL, start, end)
                 records = {}
-                for employee_id, name, pname, unit, department, punched_id, location in cursor.fetchall():
+                for employee_id, pname, unit, department, punched_id, location in cursor.fetchall():
                     mapped = employee_id is not None
                     identity = str(employee_id if mapped else punched_id)
                     key = (mapped, identity)
                     if key not in records:
-                        records[key] = dict(id=identity, name=display_name(identity, name, pname),
+                        records[key] = dict(id=identity, name=display_name(pname),
                                             unit=unit, department=department,
                                             punched=punched_id is not None, mapped=mapped,
                                             locations={})
@@ -146,7 +137,19 @@ class SharedAttendanceCache:
         self.failed = False
 
     def get(self, day):
-        with self.lock:
+        cached = self.snapshot
+        current_day = cached is not None and cached.day == day
+        if current_day and self.attempt_day == day and self.clock() < self.next_refresh:
+            return cached, self.failed
+        if current_day:
+            # Only the refresher occupies a worker. Other viewers can use the
+            # last same-day snapshot without waiting for the database query.
+            if not self.lock.acquire(blocking=False):
+                return cached, self.failed
+        else:
+            # A first load/date rollover must never serve a previous day's data.
+            self.lock.acquire()
+        try:
             if self.attempt_day != day or self.clock() >= self.next_refresh:
                 try:
                     loaded = self.loader(day)
@@ -161,3 +164,5 @@ class SharedAttendanceCache:
             if self.snapshot is None or self.snapshot.day != day:
                 raise AttendanceUnavailable('Attendance source unavailable.')
             return self.snapshot, self.failed
+        finally:
+            self.lock.release()

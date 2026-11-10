@@ -35,5 +35,11 @@ document.querySelectorAll('.wall-grid').forEach(grid => {
 const seconds=Number(document.body.dataset.refreshSeconds);
 if (Number.isFinite(seconds) && seconds>=10) {
   const refreshAt=Date.now()+seconds*1000;
-  setInterval(() => { if (Date.now()>=refreshAt && !document.hidden && !document.querySelector('dialog[open]')) location.reload(); },1000);
+  let reloading=false;
+  setInterval(() => {
+    if (!reloading && Date.now()>=refreshAt && !document.hidden && !document.querySelector('dialog[open]')) {
+      reloading=true;
+      location.reload();
+    }
+  },1000);
 }

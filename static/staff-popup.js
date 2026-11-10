@@ -35,7 +35,8 @@ if (typeof document !== 'undefined') {
     const search = dialog.querySelector('[data-staff-search]');
     const sort = dialog.querySelector('[data-staff-sort]');
     const rows = dialog.querySelector('[data-staff-rows]');
-    const groupRows = dialog.querySelector('[data-staff-groups]');
+    const groupBody = dialog.querySelector('[data-staff-groups]');
+    const breakdown = dialog.querySelector('[data-staff-breakdown]');
     let selected = [];
 
     function values() { return Object.fromEntries(selects.map(select => [select.dataset.staffFilter, select.value])); }
@@ -57,8 +58,8 @@ if (typeof document !== 'undefined') {
       matches.sort((a, b) => sort.value === 'elapsed_seconds'
         ? (b.elapsed_seconds ?? -1) - (a.elapsed_seconds ?? -1)
         : staffValue(a, sort.value).localeCompare(staffValue(b, sort.value), undefined, { numeric: true }));
-      const columns = alertMode ? ['id', 'name', 'unit', 'department', 'in_location', 'in_time', 'duration', 'physical', 'reason', 'last_event']
-        : ['id', 'name', 'pname', 'unit', 'department', 'physical', 'status'];
+      const columns = alertMode ? ['id', 'name', 'branch', 'unit', 'department', 'employee_location', 'in_location', 'last_in', 'last_out', 'last_in_hours', 'duration']
+        : ['id', 'name', 'unit', 'department', 'physical', 'status'];
       const fragment = document.createDocumentFragment();
       matches.forEach(person => {
         const row = document.createElement('tr');
@@ -75,29 +76,31 @@ if (typeof document !== 'undefined') {
         cell.colSpan = columns.length; cell.textContent = 'No employees match these filters.'; row.append(cell); fragment.append(row);
       }
       rows.replaceChildren(fragment);
-      const groups = groupStaff(matches);
       const units = new Set(matches.map(person => staffValue(person, 'unit'))).size;
       const departments = new Set(matches.map(person => staffValue(person, 'department'))).size;
       dialog.querySelector('[data-staff-count]').textContent = `${matches.length} of ${selected.length} employees · ${units} units · ${departments} departments`;
-      dialog.querySelector('[data-staff-breakdown-count]').textContent = `${groups.length} groups`;
-      const groupedFragment = document.createDocumentFragment();
-      groups.forEach(group => {
-        const row = document.createElement('tr');
-        [group.unit, group.department].forEach(value => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
-        const countCell = document.createElement('td'), button = document.createElement('button');
-        button.type = 'button'; button.textContent = String(group.count);
-        button.setAttribute('aria-label', `${group.unit}, ${group.department}: ${group.count} employees`);
-        button.addEventListener('click', () => {
-          selects.forEach(select => { select.value = ''; });
-          search.value = '';
-          const unit = selects.find(select => select.dataset.staffFilter === 'unit');
-          unit.value = group.unit; refreshChoices();
-          selects.find(select => select.dataset.staffFilter === 'department').value = group.department;
-          refreshChoices(); render();
+      if (!alertMode) {
+        const groups = groupStaff(matches);
+        breakdown.querySelector('[data-staff-breakdown-count]').textContent = `${groups.length} groups`;
+        const groupedFragment = document.createDocumentFragment();
+        groups.forEach(group => {
+          const row = document.createElement('tr');
+          [group.unit, group.department].forEach(value => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
+          const countCell = document.createElement('td'), button = document.createElement('button');
+          button.type = 'button'; button.textContent = String(group.count);
+          button.setAttribute('aria-label', `${group.unit}, ${group.department}: ${group.count} employees`);
+          button.addEventListener('click', () => {
+            selects.forEach(select => { select.value = ''; });
+            search.value = '';
+            const unit = selects.find(select => select.dataset.staffFilter === 'unit');
+            unit.value = group.unit; refreshChoices();
+            selects.find(select => select.dataset.staffFilter === 'department').value = group.department;
+            refreshChoices(); render();
+          });
+          countCell.append(button); row.append(countCell); groupedFragment.append(row);
         });
-        countCell.append(button); row.append(countCell); groupedFragment.append(row);
-      });
-      groupRows.replaceChildren(groupedFragment);
+        groupBody.replaceChildren(groupedFragment);
+      }
     }
 
     function clearFilters() {
@@ -108,7 +111,7 @@ if (typeof document !== 'undefined') {
       selected = people.filter(person => tile.dataset.staffKind === 'all' || person[tile.dataset.staffKind]);
       dialog.querySelector('[data-staff-title]').textContent = tile.dataset.title;
       clearFilters();
-      dialog.querySelector('[data-staff-breakdown]').open = tile.dataset.staffGrouped === 'true';
+      if (breakdown) breakdown.open = tile.dataset.staffGrouped === 'true';
       dialog.showModal(); rows.closest('.punch-scroll').scrollTop = 0;
     }));
     selects.forEach(select => select.addEventListener('change', () => { refreshChoices(); render(); }));

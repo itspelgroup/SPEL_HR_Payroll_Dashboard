@@ -4,6 +4,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from threading import Event
 from unittest.mock import Mock, patch
 
 from app import create_app
@@ -22,6 +23,35 @@ def sample(day):
 
 
 class CacheTests(unittest.TestCase):
+    def test_existing_snapshot_does_not_wait_for_concurrent_database_refresh(self):
+        day = date(2026, 10, 29)
+        clock = Mock(return_value=0)
+        entered, release = Event(), Event()
+        first, refreshed = sample(day), sample(day)
+        def refresh(_):
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError('Test refresh was not released')
+            return refreshed
+        loader = Mock(side_effect=[first, None])
+        cache = SharedAttendanceCache(loader, 60, clock)
+        cache.get(day)
+        loader.side_effect = refresh
+        clock.return_value = 61
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = pool.submit(cache.get, day)
+            try:
+                self.assertTrue(entered.wait(1))
+                follower = pool.submit(cache.get, day)
+                snapshot, failed = follower.result(timeout=1)
+                self.assertIs(snapshot, first)
+                self.assertFalse(failed)
+                self.assertFalse(pending.done())
+                self.assertEqual(loader.call_count, 2)
+            finally:
+                release.set()
+            self.assertIs(pending.result(timeout=1)[0], refreshed)
+
     def test_concurrent_requests_share_one_load(self):
         loader = Mock(side_effect=sample)
         cache = SharedAttendanceCache(loader, 60)
@@ -53,12 +83,12 @@ class CacheTests(unittest.TestCase):
 
 
 class EmployeeNameTests(unittest.TestCase):
-    def test_name_falls_back_for_blank_numeric_and_placeholder_values(self):
-        for name in (None, '', '  ', '001', '123456', 'User001', 'Employee 001', 'NULL'):
-            self.assertEqual(display_name('001', name, 'Payroll Person'), 'Payroll Person')
-        self.assertEqual(display_name('001', 'Valid Person', 'Payroll Person'), 'Valid Person')
-        self.assertEqual(display_name('001', 'علی', None), 'علی')
-        self.assertEqual(display_name('001', None, None), 'Name unavailable')
+    def test_employee_display_uses_only_the_canonical_source_name(self):
+        self.assertEqual(display_name(' Payroll Person '), 'Payroll Person')
+        self.assertEqual(display_name('علی'), 'علی')
+        self.assertEqual(display_name('001'), '001')
+        for value in (None, '', '  '):
+            self.assertEqual(display_name(value), 'Name unavailable')
 
 
 class SqlProviderTests(unittest.TestCase):
@@ -69,10 +99,10 @@ class SqlProviderTests(unittest.TestCase):
         cursor = connection.cursor.return_value
         cursor.fetchone.return_value = ('SPEL_ATTENDENCE', 2)
         cursor.fetchall.side_effect = [[
-            ('001', 'User001', 'Proper Person', 'UNIT3', None, '001', 'Pandoki'),
-            ('001', 'User001', 'Proper Person', 'UNIT3', None, '001', 'PANDOKI'),
-            ('002', 'Other Person', None, 'UNIT3', None, None, 'Pandoki'),
-            (None, None, None, None, None, '099', None)],
+            ('001', 'Proper Person', 'UNIT3', None, '001', 'Pandoki'),
+            ('001', 'Proper Person', 'UNIT3', None, '001', 'PANDOKI'),
+            ('002', None, 'UNIT3', None, None, 'Pandoki'),
+            (None, None, None, None, '099', None)],
             [('Pandoki', 'UNIT3'), ('Empty Location', 'UNIT9')]]
         provider = SqlAttendance(load_settings(ROOT / 'config.example.ini'))
         snapshot = provider(date(2026, 10, 29))
@@ -81,6 +111,7 @@ class SqlProviderTests(unittest.TestCase):
         self.assertEqual(snapshot.groups[0].punched, 1)
         self.assertEqual(snapshot.employees[0].name, 'Proper Person')
         self.assertEqual(snapshot.employees[0].locations, ('Pandoki',))
+        self.assertEqual(snapshot.employees[1].name, 'Name unavailable')
         self.assertTrue(connect.call_args.kwargs['readonly'])
         self.assertTrue(connect.call_args.kwargs['autocommit'])
         self.assertEqual(connection.timeout, 15)

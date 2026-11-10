@@ -13,6 +13,12 @@ The compact ATTENDANCE OVERVIEW has Location and Unit filters, four metric tiles
 
 Click a tile (or focus it and press Enter) for employee rows: EmployeeID, name, location, unit, department and punch status. Name falls back to PName when blank/NULL, numeric/ID-only or an obvious placeholder such as User123, Employee123, Unknown or N/A; neither valid shows Name unavailable. This heuristic does not change source data. Search by employee ID/name; Show more displays additional rows after the first 100. Close with X, Escape or backdrop click. Details use the shared snapshot without another server request; all employee fields are refreshed with the counts. After UI updates, restart the server and use Ctrl+F5.
 
+## Attendance Alerts
+
+Attendance Alerts uses a 96-hour punch window and classifies machine direction from complete `IN`/`OUT` tokens in device names. The In Premises count includes rostered employees whose latest event in that window is an unambiguous IN with a known location. The top Location filter contains only current `InPremLocation` values from those resolved in-premises employees; when a location no longer has anyone inferred inside, it disappears from the choices and a stale selection resets to All locations. The four tiles are In Premises, Over 12 Hours, From Other Location (unit-to-location mapping differs from the IN machine location), and Guest (employee IDs 9901–9999). The latter three are subsets of In Premises and can overlap. Below the tiles, three summary grids show employee counts by Branch Name, Unit, and Department. They all follow the top location filter. The In Premises popup retains employee punch details.
+
+The unit mapping is OFFICE/UNIT6 → HeadOffice; UNIT1/2/3/4/7 and OFFICE_P → Pandoki; UNIT5RYK/UNIT5SEZ → RahimYarkhan; UNIT8/UNIT9 → Karachi; otherwise Other. Presence is inferred, not proof of physical presence. The roster query uses `zkk_Employees_Payroll.BranchName`; source names and unit mappings should be verified before live use.
+
 ## Review with sample data
 
 Leave these settings in config.ini:

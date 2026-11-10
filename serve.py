@@ -5,4 +5,5 @@ from app import create_app
 
 if __name__ == '__main__':
     app = create_app()
-    serve(app, host=app.config['SPEL_HOST'], port=app.config['SPEL_PORT'], threads=4)
+    serve(app, host=app.config['SPEL_HOST'], port=app.config['SPEL_PORT'],
+          threads=app.config['SPEL_THREADS'])

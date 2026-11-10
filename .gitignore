@@ -7,3 +7,6 @@ __pycache__/
 *.bak
 *.rar
 instance/
+
+users.ini
+.users-*.tmp

@@ -1,0 +1,25 @@
+{
+  "captured": "2026-11-07",
+  "database": "SBO_AI",
+  "schema": "dbo",
+  "objects": {
+    "HR_MIS": {"type": "USER_TABLE", "approximate_rows": 1090287, "min_doc_date": "2023-07-01", "max_doc_date": "2026-08-31", "null_doc_dates": 0, "indexes": []},
+    "HR_MIS_C": {"type": "USER_TABLE", "approximate_rows": 63457, "min_doc_date": "2026-09-01", "max_doc_date": "2026-11-07", "null_doc_dates": 0, "indexes": []}
+  },
+  "shared_columns_in_ordinal_order": [
+    {"name": "Unit", "type": "nvarchar(500)", "nullable": true},
+    {"name": "WorkerType", "type": "nvarchar(500)", "nullable": true},
+    {"name": "SPELID", "type": "nvarchar(50)", "nullable": true},
+    {"name": "EmpName", "type": "nvarchar(100)", "nullable": true},
+    {"name": "Department", "type": "nvarchar(100)", "nullable": true},
+    {"name": "DocDate", "type": "datetime", "nullable": true},
+    {"name": "TimeIn", "type": "nvarchar(15)", "nullable": true},
+    {"name": "TimeOut", "type": "nvarchar(15)", "nullable": true},
+    {"name": "DirectWorker", "type": "int", "nullable": false},
+    {"name": "NetWorkingHours_D", "type": "float(53)", "nullable": false},
+    {"name": "OvertimeAdjustment_D", "type": "float(53)", "nullable": false},
+    {"name": "ProductionTime", "type": "numeric(38,6)", "nullable": true},
+    {"name": "CreateDateAI", "type": "datetime", "nullable": false}
+  ],
+  "notes": ["Both objects are heaps without indexes at inspection time.", "Coverage and counts are observations, not permanent partitions.", "DirectWorker 0/1 and WorkerType SPEL, HRSG, DW, INTERN observed across history.", "No employee names, IDs or credentials stored."]
+}

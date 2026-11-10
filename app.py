@@ -1,9 +1,12 @@
 """Attendance dashboard. SQL access requires explicit live configuration."""
+import ipaddress
 import json
+import os
 from datetime import datetime
 
 from flask import Flask, render_template, request, g
 
+from dashboard.access import location_allowed, safe_location_filter
 from dashboard.attendance import (AttendanceUnavailable, PAKISTAN,
                                   SharedAttendanceCache, SqlAttendance, demo_snapshot)
 from dashboard.config import load_settings
@@ -12,6 +15,7 @@ from dashboard.users import install_auth
 from dashboard.employee_views import register_employee_overview
 from dashboard.employees import direction_from_name
 from dashboard.employee_directory import register_employee_directory
+from dashboard.hr_hours import register_hr_hours
 
 
 def create_app(config_path=None, provider=None, machine_provider=None):
@@ -26,17 +30,31 @@ def create_app(config_path=None, provider=None, machine_provider=None):
     port = settings.getint('application', 'port')
     if not 1 <= port <= 65535 or settings.getint('application', 'timezone_offset_minutes') != 300:
         raise ValueError('Use a valid port and Pakistan timezone offset 300.')
+    host = (os.environ.get('SPEL_HOST') or settings.get('application', 'host')).strip()
+    if not host:
+        raise ValueError('application.host or SPEL_HOST must not be empty.')
+    try:
+        network_bind = not ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        network_bind = host.casefold() != 'localhost'
+    if live and network_bind and not settings.getboolean('security', 'enabled'):
+        raise ValueError('Authentication is required before binding live data to a network interface.')
     ttl = settings.getint('cache', 'ttl_seconds')
     if not 10 <= ttl <= 3600:
         raise ValueError('Cache TTL must be between 10 and 3600 seconds.')
     for name in ('connection_timeout_seconds', 'query_timeout_seconds'):
         if not 1 <= settings.getint('database', name) <= 120:
             raise ValueError('Database timeouts must be between 1 and 120 seconds.')
-    app.config.update(SPEL_HOST=settings.get('application', 'host'), SPEL_PORT=port,
+    app.config.update(SPEL_HOST=host, SPEL_PORT=port,
                       DEBUG=settings.getboolean('application', 'debug'))
+    threads = settings.getint('server', 'threads')
+    if not 1 <= threads <= 64:
+        raise ValueError('server.threads must be between 1 and 64.')
+    app.config['SPEL_THREADS'] = threads
     install_auth(app, settings, live)
     register_employee_overview(app, settings, live)
     register_employee_directory(app, settings, live)
+    register_hr_hours(app, settings, live)
     cache = SharedAttendanceCache(provider or (SqlAttendance(settings) if live else demo_snapshot), ttl)
     app.extensions['attendance_cache'] = cache
     refresh = settings.getint('dashboard', 'auto_refresh_seconds')
@@ -82,10 +100,7 @@ def create_app(config_path=None, provider=None, machine_provider=None):
     def machines():
         now = datetime.now(PAKISTAN)
         location = request.args.get('location', '')
-        account = getattr(g, 'dashboard_user', None)
-        assigned_location = account['location'].strip().casefold() if account and not account['is_admin'] else None
-        if assigned_location is not None:
-            location = token(assigned_location)
+        location = safe_location_filter(location)
         base = dict(today=now.strftime('%d %b %Y'), live=live, ttl=refresh,
                     location=location, recent=recent, delayed=delayed, error=False,
                     history_limit=history_limit, wall_display=wall_display, ui_colors=ui_colors)
@@ -96,12 +111,14 @@ def create_app(config_path=None, provider=None, machine_provider=None):
         locations = {}
         for machine in snapshot.machines:
             value = (machine.location or '').strip()
-            if assigned_location is not None and value.casefold() != assigned_location:
+            if not location_allowed(value):
                 continue
             locations.setdefault(token(value.casefold()), value or 'Not assigned')
         rows = []
         for machine in snapshot.machines:
             value = (machine.location or '').strip()
+            if not location_allowed(value):
+                continue
             if location and token(value.casefold()) != location:
                 continue
             status = machine_status(machine, now, recent, delayed)

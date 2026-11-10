@@ -1,4 +1,5 @@
 """Read-only active biometric employees, grouped by assigned location/unit/department."""
+from dashboard.access import location_allowed, safe_location_filter
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
@@ -47,9 +48,9 @@ class SqlEmployeeDirectory:
                 if not row or row[0] != 'SPEL_ATTENDENCE' or row[1] != 2:
                     raise AttendanceUnavailable('Unexpected database or session isolation.')
                 cursor.execute(DIRECTORY_SQL)
-                employees = tuple(DirectoryEmployee(str(identity).strip(), display_name(str(identity), name, pname),
+                employees = tuple(DirectoryEmployee(str(identity).strip(), display_name(pname),
                                   pname, unit, department, physical)
-                                  for identity, name, pname, unit, department, physical in cursor.fetchall())
+                                  for identity, pname, unit, department, physical in cursor.fetchall())
         return DirectorySnapshot(employees, datetime.now(PAKISTAN), day)
 
 
@@ -74,9 +75,7 @@ def register_employee_directory(app, settings, live):
     def employee_directory():
         now = datetime.now(PAKISTAN)
         location = request.args.get('location','')
-        account = getattr(g,'dashboard_user',None)
-        if account and not account['is_admin']:
-            location = json.dumps(normalized_location(account['location'],aliases))
+        location = safe_location_filter(location, aliases=aliases)
         base = dict(today=now.strftime('%d %b %Y'),live=live,ttl=interval,location=location,
                     error=False,ui_colors=app.config['SPEL_UI_COLORS'],
                     wall_display=dict(settings.items('wall_display')))
@@ -86,10 +85,12 @@ def register_employee_directory(app, settings, live):
             return render_template('employee_directory.html',**base|{'error':True}),503
         locations = {}
         for person in snapshot.employees:
+            if not location_allowed(person.physical, aliases=aliases):
+                continue
             value = normalized_location(person.physical,aliases)
             locations.setdefault(json.dumps(value), (person.physical or '').strip() or 'Not assigned')
         located = [person for person in snapshot.employees
-                   if not location or json.dumps(normalized_location(person.physical,aliases)) == location]
+                   if location_allowed(person.physical, aliases=aliases) and (not location or json.dumps(normalized_location(person.physical,aliases)) == location)]
         def label(value):
             return (value or '').strip() or 'Not assigned'
         selected = located

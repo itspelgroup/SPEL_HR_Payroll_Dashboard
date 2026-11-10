@@ -1,9 +1,21 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SPEL | Attendance Alerts</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='machine-wall.css', v=2) }}"><link rel="stylesheet" href="{{ url_for('static', filename='employees.css', v=7) }}"><link rel="stylesheet" href="{{ url_for('static', filename='dashboard-layout.css', v=1) }}"><link rel="stylesheet" href="{{ url_for('static', filename='staff-popup.css', v=1) }}">{% include 'dashboard_theme.html' %}<script src="{{ url_for('static', filename='machines.js', v=7) }}" defer></script><script src="{{ url_for('static', filename='staff-popup.js', v=2) }}" defer></script></head>
+<link rel="stylesheet" href="{{ url_for('static', filename='machine-wall.css', v=2) }}"><link rel="stylesheet" href="{{ url_for('static', filename='employees.css', v=11) }}"><link rel="stylesheet" href="{{ url_for('static', filename='dashboard-layout.css', v=2) }}"><link rel="stylesheet" href="{{ url_for('static', filename='staff-popup.css', v=3) }}">{% include 'dashboard_theme.html' %}<script src="{{ url_for('static', filename='machines.js', v=8) }}" defer></script><script src="{{ url_for('static', filename='staff-popup.js', v=5) }}" defer></script></head>
 <body data-refresh-seconds="{{ ttl }}"><script type="application/json" id="wall-settings">{{ wall_display|tojson }}</script>{% set active_tab = 'alerts' %}{% include 'dashboard_banner.html' %}
 <main class="employee-main staff-tile-screen">{% if error %}<p class="empty" role="alert">Employee data unavailable. Retrying every {{ ttl }} seconds.</p>{% else %}<section class="employee-metrics" aria-label="Presence and exceptions">
-<button class="metric-inside" data-staff-kind="inside" data-title="In premises — inferred from unmatched IN" aria-haspopup="dialog" aria-controls="employee-overview-details"><span>In Premises <small>· inferred</small></span><strong>{{ inside }}</strong><small>Latest IN with no later OUT · View details ↗</small></button>
+<button class="metric-inside" data-staff-kind="inside" data-staff-grouped="true" data-title="In Premises · {{ location_label or 'All Locations' }}" aria-haspopup="dialog" aria-controls="employee-overview-details"><span>In Premises <small>· {{ location_label or 'all locations' }}</small></span><strong>{{ inside }}</strong><small>Employees whose latest event is IN · View details ↗</small></button>
 <button class="metric-overdue" data-staff-kind="overdue" data-title="In premises over {{ '%g'|format(long_hours) }} hours" aria-haspopup="dialog" aria-controls="employee-overview-details"><span>Over {{ '%g'|format(long_hours) }} Hours</span><strong>{{ overdue }}</strong><small>Extended stay / missed OUT · View details ↗</small></button>
 <button class="metric-mismatch" data-staff-kind="mismatch" data-title="From Other Location" aria-haspopup="dialog" aria-controls="employee-overview-details"><span>From Other Location</span><strong>{{ mismatch }}</strong><small>Assigned location differs from IN site · View details ↗</small></button>
-<button class="metric-review" data-staff-kind="review" data-title="Presence records needing review" aria-haspopup="dialog" aria-controls="employee-overview-details"><span>Needs Review</span><strong>{{ review }}</strong><small>Unresolved events / missing assignment · View details ↗</small></button></section>
-<p class="employee-footnote">Updated {{ loaded_at }} PKT · {{ lookback }}h window. Presence is inferred. {{ no_event }} employees have no recent event and remain unclassified. Alerts may overlap.</p>{% set staff_mode = 'alerts' %}{% include 'staff_popup.html' %}{% endif %}</main></body></html>
+<button class="metric-review" data-staff-kind="guest" data-title="Guests in premises" aria-haspopup="dialog" aria-controls="employee-overview-details"><span>Guest</span><strong>{{ guest }}</strong><small>Employee IDs 9901–9999 · View details ↗</small></button></section>
+<section class="attendance-breakdowns" aria-label="In premises employees by branch, unit and department">
+  {% for key,title in [('branch','Branch Name'),('unit','Unit'),('department','Department')] %}
+  <section class="attendance-breakdown">
+    <h2>{{ title }} <small>{{ inside }} employees</small></h2>
+    <div class="attendance-breakdown-scroll">
+      <table><thead><tr><th>{{ title }}</th><th>Employees</th></tr></thead>
+        <tbody>{% for row in summaries[key] %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.count }}</td></tr>{% else %}<tr><td colspan="2">No employees in this location</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+  {% endfor %}
+</section>
+<p class="employee-footnote">Updated {{ loaded_at }} PKT · {{ lookback }}h window. In Premises is inferred from each rostered employee's latest unambiguous IN punch. Alert tiles are subsets of the selected location's In Premises employees and can overlap.</p>{% set staff_mode = 'alerts' %}{% include 'staff_popup.html' %}{% endif %}</main></body></html>

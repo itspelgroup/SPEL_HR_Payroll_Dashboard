@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPEL | {% block title %}Account{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='accounts.css', v=1) }}"></head>
+<body><header><a class="brand" href="/">SPEL</a><nav><a href="/">Dashboard</a>{% if dashboard_user %}{% if dashboard_user.is_admin %}<a href="/settings">Settings</a>{% endif %}<a href="/account">{{ dashboard_user.username }}</a><form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button>Sign out</button></form>{% endif %}</nav></header>
+<main>{% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}{% if saved %}<p class="notice" role="status">Saved.</p>{% endif %}{% block content %}{% endblock %}</main></body></html>

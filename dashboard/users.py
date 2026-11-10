@@ -1,4 +1,4 @@
-"""Local dashboard accounts; independent of attendance database credentials."""
+"""INI-backed authentication and administrative account management."""
 import argparse
 from contextlib import contextmanager
 from datetime import timedelta
@@ -11,12 +11,12 @@ import threading
 import time
 
 from flask import abort, g, redirect, render_template, request, session
-from werkzeug.security import check_password_hash, generate_password_hash
-
-from dashboard.config import ROOT
+from dashboard.config import ROOT, load_settings
+from dashboard.account_store import (IniUserStore, AccountStoreError, public_account,
+                                     verify_password, account_token, valid_password)
+from dashboard.access import TABS, ENDPOINT_TABS, can_view, home
 
 AUTH_DIR = ROOT / 'instance'
-
 
 @contextmanager
 def connect_users(folder):
@@ -34,11 +34,20 @@ def connect_users(folder):
 
 
 def install_auth(app, settings, live):
-    # Authentication is deferred until the user requests its activation.
     enabled = settings.getboolean('security', 'enabled', fallback=False)
     app.config['SPEL_AUTH_ENABLED'] = enabled
+    app.config['MAX_CONTENT_LENGTH'] = 128 * 1024
     folder = Path(settings.get('security', 'account_directory', fallback=str(AUTH_DIR)))
+    if not folder.is_absolute():
+        folder = ROOT / folder
+    user_path = Path(settings.get('security', 'user_file', fallback=str(folder / 'users.ini')))
+    if not user_path.is_absolute():
+        user_path = ROOT / user_path
+    store = IniUserStore(user_path, settings.get('security', 'password_storage', fallback='plain'),
+                         settings.getint('security', 'minimum_password_length', fallback=8))
+    app.extensions['user_store'] = store
     if enabled:
+        store.initialize(folder)
         folder.mkdir(parents=True, exist_ok=True)
         secret_path = folder / 'session.key'
         try:
@@ -53,48 +62,83 @@ def install_auth(app, settings, live):
     attempts = {}
     lock = threading.Lock()
 
+    def csrf_check():
+        expected = session.get('csrf', '')
+        if not expected or not hmac.compare_digest(expected.encode(), request.form.get('csrf', '').encode()):
+            abort(400)
+
     @app.before_request
     def identify_user():
         g.dashboard_user = None
         if not enabled or request.endpoint == 'static':
             return
-        username = session.get('username')
-        if username:
-            with connect_users(folder) as connection:
-                account = connection.execute('SELECT username, location, is_admin FROM users '
-                                             'WHERE username=?', (username,)).fetchone()
-            if account:
-                g.dashboard_user = dict(account)
-        if request.endpoint not in ('login', 'static') and not g.dashboard_user:
-            return redirect('/login')
-        if request.endpoint == 'attendance' and g.dashboard_user and not g.dashboard_user['is_admin']:
-            abort(403)
-        if request.endpoint in ('machines', 'attendance'):
-            # Employee and machine details must not be stored in browser caches.
+        try:
+            data = store.read()
+        except AccountStoreError:
+            abort(503, description='Account configuration unavailable. Contact the administrator.')
+        account = data['users'].get(session.get('username'))
+        if account and account['enabled'] and session.get('revision') == account_token(account):
+            g.dashboard_user = public_account(account)
+        elif session.get('username'):
+            session.clear()
+        session.setdefault('csrf', secrets.token_urlsafe(32))
+        if request.endpoint is None:
+            return
+        if request.endpoint not in ('login', 'setup') and not g.dashboard_user:
+            return redirect('/login' if data['users'] else '/setup')
+        if g.dashboard_user:
+            if request.endpoint in ('settings_users', 'attendance') and not g.dashboard_user['is_admin']:
+                abort(403)
+            tab = ENDPOINT_TABS.get(request.endpoint)
+            if tab and not can_view(tab):
+                if request.endpoint == 'machines':
+                    return redirect(home(g.dashboard_user))
+                abort(403)
             session.permanent = True
 
     @app.after_request
     def private_dashboard(response):
         if request.endpoint != 'static':
             response.headers['Cache-Control'] = 'no-store'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         return response
 
     @app.context_processor
     def user_context():
-        return dict(dashboard_user=getattr(g, 'dashboard_user', None),
-                    csrf_token=session.get('csrf', '') if enabled else '')
+        return dict(dashboard_user=getattr(g, 'dashboard_user', None), can_view_tab=can_view,
+                    auth_enabled=enabled, csrf_token=session.get('csrf', '') if enabled else '')
+
+    @app.route('/setup', methods=['GET', 'POST'])
+    def setup():
+        if not enabled:
+            return redirect('/')
+        if store.read()['users']:
+            return redirect('/login')
+        if request.remote_addr not in ('127.0.0.1', '::1'):
+            abort(403, description='Create the first administrator on the server using localhost.')
+        error = None
+        if request.method == 'POST':
+            csrf_check()
+            try:
+                store.save_user(request.form.get('username', ''), password=request.form.get('password', ''),
+                                is_admin=True, all_locations=True, tabs=list(TABS), create=True, bootstrap=True)
+                return redirect('/login')
+            except (ValueError, AccountStoreError) as exc:
+                error = str(exc)
+        return render_template('account_setup.html', error=error, minimum=store.minimum_password_length)
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if not enabled:
             return redirect('/')
+        if not store.read()['users']:
+            return redirect('/setup')
         if g.dashboard_user:
-            return redirect('/')
-        session.setdefault('csrf', secrets.token_urlsafe(32))
+            return redirect(home(g.dashboard_user))
         error = None
         if request.method == 'POST':
-            if not hmac.compare_digest(session['csrf'], request.form.get('csrf', '')):
-                abort(400)
+            csrf_check()
             username = request.form.get('username', '').strip().casefold()
             key = (request.remote_addr, username)
             now = time.monotonic()
@@ -104,15 +148,14 @@ def install_auth(app, settings, live):
                 count, until = attempts.get(key, (0, now + 900))
             if count >= 5:
                 return render_template('login.html', error='Too many attempts. Try again in 15 minutes.'), 429
-            with connect_users(folder) as connection:
-                account = connection.execute('SELECT * FROM users WHERE username=?', (username,)).fetchone()
-            if account and check_password_hash(account['password_hash'], request.form.get('password', '')):
+            account = store.read()['users'].get(username)
+            if account and account['enabled'] and verify_password(account, request.form.get('password', '')):
                 with lock:
                     attempts.pop(key, None)
                 session.clear()
-                session.update(username=username, csrf=secrets.token_urlsafe(32))
+                session.update(username=username, revision=account_token(account), csrf=secrets.token_urlsafe(32))
                 session.permanent = True
-                return redirect('/')
+                return redirect(home(account))
             with lock:
                 attempts[key] = (count + 1, until)
             error = 'Username or password is incorrect.'
@@ -120,33 +163,97 @@ def install_auth(app, settings, live):
 
     @app.post('/logout')
     def logout():
-        if enabled and not hmac.compare_digest(session.get('csrf', ''), request.form.get('csrf', '')):
-            abort(400)
+        if enabled:
+            csrf_check()
         session.clear()
         return redirect('/login')
 
+    @app.route('/settings', methods=['GET', 'POST'])
+    def settings_users():
+        if not enabled:
+            abort(403, description='Enable authentication to manage users.')
+        error = None
+        if request.method == 'POST':
+            csrf_check()
+            try:
+                if request.form.get('action') == 'location':
+                    store.save_location(request.form.get('label', ''), request.form.get('hr_units', '').splitlines())
+                elif request.form.get('action') in ('create', 'edit'):
+                    result = store.save_user(request.form.get('username', ''),
+                        password=request.form.get('password', ''), enabled='enabled' in request.form,
+                        is_admin='is_admin' in request.form, all_locations='all_locations' in request.form,
+                        tabs=request.form.getlist('tabs'), locations=request.form.getlist('locations'),
+                        create=request.form['action'] == 'create')
+                    if result['username'] == g.dashboard_user['username']:
+                        session['revision'] = account_token(store.read()['users'][result['username']])
+                else:
+                    raise ValueError('Unknown settings action.')
+                return redirect('/settings?saved=1')
+            except (ValueError, AccountStoreError) as exc:
+                error = str(exc)
+        data = store.read()
+        return render_template('settings.html', error=error, saved=request.args.get('saved') == '1',
+            accounts=[public_account(v) for _, v in sorted(data['users'].items())],
+            location_map=data['locations'], tabs=TABS, storage=store.password_storage,
+            minimum=store.minimum_password_length)
+
+    @app.route('/account', methods=['GET', 'POST'])
+    def account_password():
+        if not enabled:
+            abort(403)
+        error = None
+        if request.method == 'POST':
+            csrf_check()
+            try:
+                password = request.form.get('password', '')
+                if not password:
+                    raise ValueError('Enter a new password.')
+                if password != request.form.get('confirm_password', ''):
+                    raise ValueError('New passwords must match.')
+                result = store.change_password(g.dashboard_user['username'],
+                    request.form.get('current_password', ''), password, session['revision'])
+                session['revision'] = account_token(store.read()['users'][result['username']])
+                return redirect('/account?saved=1')
+            except (ValueError, AccountStoreError) as exc:
+                error = str(exc)
+        return render_template('account_password.html', error=error, saved=request.args.get('saved') == '1',
+                               minimum=store.minimum_password_length)
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Create or update a dashboard account locally.')
+    parser = argparse.ArgumentParser(description='Create/reset a local INI dashboard account.')
     parser.add_argument('--username', required=True)
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument('--admin', action='store_true')
-    scope.add_argument('--location')
-    parser.add_argument('--directory', type=Path, default=AUTH_DIR)
+    scope.add_argument('--location', action='append')
+    parser.add_argument('--directory', type=Path)
+    parser.add_argument('--config', type=Path)
     args = parser.parse_args()
-    username = args.username.strip().casefold()
-    location = (args.location or '').strip()
-    if not username or (not args.admin and not location):
-        parser.error('Provide a username and an exact device location, or --admin.')
-    password = getpass('Password (at least 12 characters): ')
-    if len(password) < 12 or password != getpass('Confirm password: '):
-        parser.error('Passwords must match and contain at least 12 characters.')
-    with connect_users(args.directory) as connection:
-        connection.execute('INSERT INTO users VALUES (?, ?, ?, ?) ON CONFLICT(username) '
-                           'DO UPDATE SET password_hash=excluded.password_hash, '
-                           'location=excluded.location, is_admin=excluded.is_admin',
-                           (username, generate_password_hash(password), location or None, int(args.admin)))
-    print('Dashboard account saved. Attendance SQL data was not changed.')
+    settings = load_settings(args.config)
+    folder = args.directory or Path(settings.get('security', 'account_directory', fallback=str(AUTH_DIR)))
+    if not folder.is_absolute():
+        folder = ROOT / folder
+    path = folder / 'users.ini' if args.directory else Path(settings.get('security', 'user_file', fallback=str(folder / 'users.ini')))
+    if not path.is_absolute():
+        path = ROOT / path
+    store = IniUserStore(path, settings.get('security', 'password_storage', fallback='plain'),
+                         settings.getint('security', 'minimum_password_length', fallback=8))
+    store.initialize(folder)
+    password = getpass('New password: ')
+    if password != getpass('Confirm password: '):
+        parser.error('Passwords must match.')
+    if not valid_password(password, store.minimum_password_length):
+        parser.error('Password is too short or contains surrounding spaces/control characters.')
+    try:
+        for label in args.location or []:
+            if label not in store.read()['locations']:
+                store.save_location(label, [])
+        store.save_user(args.username, password=password, is_admin=args.admin, all_locations=args.admin,
+            tabs=list(TABS) if args.admin else ['machines', 'alerts', 'directory'], locations=args.location or [],
+            create=args.username.strip().casefold() not in store.read()['users'])
+    except (ValueError, AccountStoreError) as exc:
+        parser.error(str(exc))
+    print('Dashboard account saved. SQL data was not changed.')
 
 
 if __name__ == '__main__':

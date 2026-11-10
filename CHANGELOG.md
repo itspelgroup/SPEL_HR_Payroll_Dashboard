@@ -1,4 +1,45 @@
 # Changelog
+
+## Attendance alert query and tiles - 2026-11-10
+Expanded the inferred presence window to 96 hours and aligned Attendance Alerts with the user's base query: only employees whose latest unambiguous event is IN are in scope. Retained only In Premises, Over 12 Hours, From Other Location, and Guest tiles. Location options and counts use `InPremLocation`. Moved the separate Branch Name, Unit, and Department employee summary grids from the In Premises popup onto the main page under the tiles; all remain scoped by the selected location. Removed missing-punch/review tiles. Added payroll branch and last IN/OUT detail. No database changes.
+Optimized the bounded punch query to classify once and use window aggregates instead of repeated latest-event and last-punch aggregation joins. Preserved latest-event timestamp ties and kept CHECKTIME filter sargable. Guest IDs are excluded from From Other Location; over-12-hours uses the base query's two-decimal comparison.
+
+## Continuous monthly graph - 2026-11-07
+Restored a shared-axis vertical monthly bar graph; removed individual month cards/header pills and automatic monthly horizontal orientation. Narrow displays scroll across the graph; bright current/muted prior bars, three values and drilldowns are retained. 19 targeted Python and 42 JS checks pass; visual review pending. No SQL/configuration changes.
+
+## Multi-user Settings and INI accounts - 2026-11-07
+Added admin Settings with account creation/edit/disable/password reset, multiple allowed tabs and locations, self-service password changes, localhost bootstrap and explicit HR-unit mappings. Activated local authentication and migrated the existing admin hash without SQL Server access; new/reset passwords use the requested plaintext INI storage with optional hashing. Enforced scopes before all dashboard response payloads; added CSRF, session revocation and account recovery. 102 offline tests pass; network deployment and visual QA pending. See docs/DASHBOARD_ACCOUNTS.md.
+
+## HR page clipping and bright month panels - 2026-11-07
+Scoped HR-only document scrolling overrides the inherited wall-page overflow lock. Moved compact YTD tiles before the graph and fit chart height to remaining viewport/dialog space, including filter changes. Brightened month cards with blue gradients, cyan borders and large uppercase header pills, with horizontal spacing adjusted. 19 targeted Python tests, 37 JS helper and 5 viewport checks pass; visual browser QA pending. No SQL/database/config changes.
+
+## Clearer comparison bars and month groups - 2026-11-07
+Brightened current-FY bars, made prior-FY bars muted but visible, increased bar width/thickness and made all three values bolder/larger. Added distinct shaded bordered partitions and month badges for monthly pairs, with spacing adjusted for both orientations. Updated asset versions. Sample routes and 37 V8 checks pass; no data/query changes.
+
+## Simplified current/prior FY comparison - 2026-11-07
+Replaced generic comparison controls with fixed Monthly current-vs-previous FY month pairs and Yearly all-history FY totals plus current YTD. Removed range/custom-date/orientation/manual-period menus, retained optional dimension filters. Bars show working, OT and total separately; total remains a label/cap, never a duplicated segment. Three YTD tiles and exact-value table replace diagnostics. All-history aggregate verified ~0.424s; 83 Python and 37 V8 checks pass. Screenshot unavailable; no database changes or commit/push.
+
+## Fit HR graphs to the screen - 2026-11-07
+Replaced fixed-width SVG sizing with measured responsive layout and resize handling. Added Auto/Vertical/Horizontal orientation and expanded graph dialog. Moved the graph above compact summary tiles, widened the page and preserved exact values in tooltips/table while compacting chart labels. 80 Python and 29 V8 checks pass, plus sample HTML/control checks. Visual browser QA remains pending; no SQL/database/config changes.
+
+## Fiscal July–June graphs - 2026-11-07
+Changed HR monthly/yearly comparisons to fiscal years with July–June ordering, first/last FY selectors and optional custom dates. One stacked net/OT bar carries a total marker/label; added legend, fiscal bands and explicit graph axis names. Current periods are partial and future months Upcoming; future dates are excluded from query bounds. Fixed fiscal-year detail drilldown across January. 80 Python and 21 V8 helper checks pass. No SQL execution/DB changes; visual QA pending.
+
+## Monthly/yearly HR comparisons - 2026-11-07
+Added SQL-aggregated monthly/yearly views with net/OT/total graphs, selectable series and two-period hour/percentage deltas. Applied confirmed Total = Net + Overtime in tiles, graphs and popups; changed OT share denominator to total. Removed Source filtering. Kept bounded daily employee details with monthly drill-through. Partial selections, record coverage and missing periods remain explicit. Four-year read ~0.376s for 6,930 grouped rows; 74 Python and 14 V8 helper checks pass. No database changes; browser QA pending.
+
+## HR Hours / SBO_AI - 2026-11-07
+Evaluated HR_MIS/HR_MIS_C schemas, history ranges and absent indexes. Added HR Hours tab with six insight tiles, date/unit/department/worker filters, daily chart and cached searchable employee/grouped detail popups. Signed adjustments and repeated rows remain included with review flags. Bounded SELECTs, schema inventory and manual performance script saved separately. Seven-day live check ~0.213s; 64 Python checks pass. Browser QA incomplete. No database changes; earlier uncommitted development preserved.
+
+## HR/Payroll source decision - 2026-11-07
+Recorded SBO_AI as the database for upcoming HR and Payroll dashboards, superseding the earlier SBO_PAYROLL source plan for new modules. Attendance remains on SPEL_ATTENDENCE. Next step is a read-only schema inventory and source/key validation before choosing tiles and measuring queries. No SQL executed or database/configuration changes made.
+
+## Canonical employee name sources - 2026-11-03
+Changed attendance snapshots, alert roster and active employee directory queries to select PName directly from zkk_Employees. Removed Name-first fallback and duplicate Name/PName popup columns. Machine punch names continue to come from PName and now use the same blank-name formatting. Recorded zkk_Employees_Payroll.Name as the canonical field for future payroll-table integration; no unsupported join was introduced. Added source-policy regression checks. No database values were modified.
+
+## Waitress queue pressure - 2026-11-03
+Moved worker count from hard-coded 4 to [server] threads (default/local 8). Warm-cache readers no longer wait behind an in-progress database refresh; one request refreshes while others reuse the last same-day snapshot. Cold start and rollover retain single-load protection. Automatic refresh now initiates only one reload rather than potentially repeating it each second while a navigation is pending. Added worker-setting and concurrent-refresh regression tests. No queue-warning suppression, live SQL or database changes were performed; production timing is still needed to confirm the observed cause.
+
 ## v0.3.0 development checkpoint - 2026-11-02
 Saved machine monitoring, 72-hour attendance alerts and active biometric Employees tabs with location-based scopes and tile-only staff screens. Shared popups provide unit/department filters, location/review filters, search, sorting and grouped counts. Designation is deferred at the user's request; removed its placeholder, data fields and filter. Authentication remains deferred/off by default. Local config, account stores and credentials remain excluded. Validation: 49 Python tests and 8 JavaScript checks; no live-query, browser or deployment verification claimed.
 

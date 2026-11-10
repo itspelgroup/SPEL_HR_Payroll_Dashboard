@@ -60,7 +60,7 @@ class EmployeeDirectoryTests(unittest.TestCase):
         settings.set('database','authentication','windows')
         cursor=connect.return_value.cursor.return_value
         cursor.fetchone.return_value=('SPEL_ATTENDENCE',2)
-        cursor.fetchall.return_value=[('001','User001','Actual Person','U1','HR','Pandoki')]
+        cursor.fetchall.return_value=[('001','Actual Person','U1','HR','Pandoki')]
         snapshot=SqlEmployeeDirectory(settings)(datetime.now(PAKISTAN).date())
         self.assertEqual(snapshot.employees[0].name,'Actual Person')
         calls=cursor.execute.call_args_list
