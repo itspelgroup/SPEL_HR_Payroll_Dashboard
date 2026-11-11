@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from flask import render_template, request
 
 from dashboard.attendance import AttendanceUnavailable, PAKISTAN, SharedAttendanceCache
-from dashboard.employees import SqlEmployees, demo_employees
+from dashboard.employees import SqlEmployees
 
 
 def normalized_location(value, aliases=None):
@@ -37,7 +37,12 @@ def register_employee_overview(app, settings, live):
         raise ValueError('Employee settings require refresh 10–3600 seconds and 0 < long_stay_hours < lookback_hours <= 168.')
     aliases = {normalized_location(key):normalized_location(value)
                for key,value in settings.items('employee_location_aliases')} if settings.has_section('employee_location_aliases') else {}
-    cache = SharedAttendanceCache(SqlEmployees(settings) if live else demo_employees, interval)
+    if live:
+        loader = SqlEmployees(settings)
+    else:
+        from dashboard.employees import demo_employees
+        loader = demo_employees
+    cache = SharedAttendanceCache(loader, interval)
     app.extensions['employee_overview_cache'] = cache
 
     @app.get('/employees')

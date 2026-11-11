@@ -1,5 +1,8 @@
 import unittest
 import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from app import create_app
 from dashboard.config import ROOT
@@ -38,6 +41,36 @@ class AttendanceDashboardTests(unittest.TestCase):
         html = self.client.get('/attendance?unit=%3Cscript%3E').text
         self.assertIn('No registered employees match', html)
         self.assertNotIn('<script>', html)
+
+    def test_live_only_deployment_rejects_demo_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'config.ini'
+            config.write_text(
+                '[application]\ndata_mode = demo\n'
+                '[database]\nenabled = false\n'
+                '[deployment]\nlive_only = true\n',
+                encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'requires live data mode'):
+                create_app(config)
+
+    def test_live_deployment_does_not_import_demo_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / 'config.ini'
+            config.write_text(
+                '[application]\ndata_mode = live\n'
+                '[database]\nenabled = true\n'
+                '[cache]\nenabled = true\n'
+                '[deployment]\nlive_only = true\n'
+                '[security]\nenabled = true\n'
+                'user_file = ' + str(root / 'users.ini') + '\n'
+                'account_directory = ' + str(root / 'instance') + '\n',
+                encoding='utf-8')
+            with patch.dict('sys.modules', {'dashboard.demo': None}):
+                client = create_app(config).test_client()
+                response = client.get('/')
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.location, '/setup')
 
 
 if __name__ == '__main__':

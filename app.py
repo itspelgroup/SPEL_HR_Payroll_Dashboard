@@ -8,9 +8,9 @@ from flask import Flask, render_template, request, g
 
 from dashboard.access import location_allowed, safe_location_filter
 from dashboard.attendance import (AttendanceUnavailable, PAKISTAN,
-                                  SharedAttendanceCache, SqlAttendance, demo_snapshot)
+                                  SharedAttendanceCache, SqlAttendance)
 from dashboard.config import load_settings
-from dashboard.machines import SqlMachines, demo_machines, machine_status, recent_punch
+from dashboard.machines import SqlMachines, machine_status, recent_punch
 from dashboard.users import install_auth
 from dashboard.employee_views import register_employee_overview
 from dashboard.employees import direction_from_name
@@ -25,6 +25,8 @@ def create_app(config_path=None, provider=None, machine_provider=None):
     live = mode == 'live'
     if mode not in ('demo', 'live') or settings.getboolean('database', 'enabled') != live:
         raise ValueError('Use demo/database enabled=false or live/database enabled=true.')
+    if settings.getboolean('deployment', 'live_only', fallback=False) and not live:
+        raise ValueError('This deployment package requires live data mode.')
     if live and not settings.getboolean('cache', 'enabled'):
         raise ValueError('Shared application caching is required in live mode.')
     port = settings.getint('application', 'port')
@@ -55,7 +57,14 @@ def create_app(config_path=None, provider=None, machine_provider=None):
     register_employee_overview(app, settings, live)
     register_employee_directory(app, settings, live)
     register_hr_hours(app, settings, live)
-    cache = SharedAttendanceCache(provider or (SqlAttendance(settings) if live else demo_snapshot), ttl)
+    if provider is not None:
+        attendance_loader = provider
+    elif live:
+        attendance_loader = SqlAttendance(settings)
+    else:
+        from dashboard.attendance import demo_snapshot
+        attendance_loader = demo_snapshot
+    cache = SharedAttendanceCache(attendance_loader, ttl)
     app.extensions['attendance_cache'] = cache
     refresh = settings.getint('dashboard', 'auto_refresh_seconds')
     history_limit = settings.getint('punch_history', 'limit')
@@ -75,8 +84,14 @@ def create_app(config_path=None, provider=None, machine_provider=None):
                  'compact_gap_pixels', 'compact_breakpoint_pixels', 'max_font_scale'):
         if not 0 < float(wall_display[name]) <= 10000:
             raise ValueError('wall_display.' + name + ' must be positive and at most 10000.')
-    machine_cache = SharedAttendanceCache(
-        machine_provider or (SqlMachines(settings) if live else demo_machines), refresh)
+    if machine_provider is not None:
+        machine_loader = machine_provider
+    elif live:
+        machine_loader = SqlMachines(settings)
+    else:
+        from dashboard.machines import demo_machines
+        machine_loader = demo_machines
+    machine_cache = SharedAttendanceCache(machine_loader, refresh)
     app.extensions['machine_cache'] = machine_cache
     recent = settings.getint('machine_activity', 'recent_minutes')
     delayed = settings.getint('machine_activity', 'delayed_minutes')

@@ -1,0 +1,30 @@
+SPEL HR & Payroll Dashboard - live-data package
+
+1. Extract this ZIP into a permanent folder on the Windows server, for example C:\HR_Dashboard.
+2. Install ODBC Driver 17 for SQL Server and Python 3 on the server.
+3. Edit config.ini:
+   - Set database.server to the SQL Server name or address.
+   - Set database.username/password to a dedicated SQL read-only login,
+     or set authentication = windows for a permitted Windows service account.
+   - Grant that login read access to SPEL_ATTENDENCE and SBO_AI on the same SQL Server.
+   - Keep [application] data_mode = live and [security] enabled = true.
+   - Keep password_storage = hash.
+4. Configure inbound TCP port 5000 only for trusted LAN addresses. In elevated
+   PowerShell, run .\allow-lan-firewall.ps1. Do not configure internet port forwarding.
+5. Double-click start-live.bat. The first run creates .venv and installs Python
+   dependencies; internet access may be required.
+6. On the server, visit http://127.0.0.1:5000/setup to create the first administrator.
+   Setup is local-server-only. Sign in, add real locations in Settings, then
+   create individual users and grant only the required tabs and locations.
+7. LAN users browse to http://SERVER-IP:5000. Keep the console window open;
+   Ctrl+C stops this interactive server.
+
+This package is live-only and contains no sample dataset or sample accounts.
+If SQL access fails, the dashboard reports unavailable data rather than sample data.
+
+HTTP does not encrypt passwords or dashboard traffic. Keep access inside a trusted
+LAN for initial use. For sensitive or routed networks, use an HTTPS reverse proxy,
+set cookie_secure = true, and share only its HTTPS URL.
+
+Keep config.ini, users.ini, and instance/ private and backed up. Never send them
+with future source ZIPs. The app itself performs SELECT-only database queries.

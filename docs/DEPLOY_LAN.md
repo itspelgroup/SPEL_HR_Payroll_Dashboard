@@ -4,6 +4,11 @@ The easiest Windows deployment is one central server running the dashboard in
 a single Waitress process. All desktops visit that server; do not install a
 separate running instance at each location.
 
+For a live-only ZIP with a preconfigured `config.ini`, empty private `users.ini`,
+and no sample fixtures, use `deployment-config.ini`, `deployment-users.ini`,
+`DEPLOY_LIVE.txt`, and `start-live.bat`. It refuses demo mode; source development
+remains demo-capable.
+
 ## Quick start (sample data)
 
 1. Copy the project folder to the Windows server. Do not copy a developer

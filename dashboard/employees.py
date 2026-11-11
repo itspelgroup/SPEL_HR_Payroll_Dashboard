@@ -6,7 +6,7 @@ import csv
 import re
 
 from dashboard.attendance import (PAKISTAN, PREFLIGHT_SQL, QUERY_DIR,
-                                  AttendanceUnavailable, demo_snapshot, display_name)
+                                  AttendanceUnavailable, display_name)
 from dashboard.config import ROOT, build_connection_string
 
 ROSTER_SQL = (QUERY_DIR / 'employee_roster.sql').read_text(encoding='utf-8')
@@ -122,6 +122,8 @@ def build_employees(roster, devices, events, directions, now):
 
 
 def demo_employees(day):
+    from dashboard.attendance import demo_snapshot
+
     now = datetime.now(PAKISTAN)
     roster = demo_snapshot(day)
     people = []

@@ -7,7 +7,6 @@ from threading import Lock
 from time import monotonic
 
 from dashboard.config import build_connection_string
-from dashboard.demo import EMPLOYEES, PUNCHED_IDS
 
 PAKISTAN = timezone(timedelta(hours=5))
 QUERY_DIR = Path(__file__).resolve().parent.parent / 'sql' / 'dashboard'
@@ -68,6 +67,8 @@ class AttendanceUnavailable(Exception):
 
 
 def demo_snapshot(day):
+    from dashboard.demo import EMPLOYEES, PUNCHED_IDS
+
     mapping = {'UNIT3': ('Pandoki',), 'UNIT5RYK': ('RahimYarkhan',),
                'UNIT6': ('HeadOffice',), 'UNIT8': ('Karachi',)}
     employees = [Employee(e['id'], 'Sample employee ' + e['id'][-3:], e['unit'],

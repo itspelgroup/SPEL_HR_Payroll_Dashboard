@@ -8,7 +8,7 @@ import json
 from flask import g, render_template, request
 
 from dashboard.attendance import (AttendanceUnavailable, PAKISTAN, PREFLIGHT_SQL, QUERY_DIR,
-                                  SharedAttendanceCache, demo_snapshot, display_name)
+                                  SharedAttendanceCache, display_name)
 from dashboard.config import build_connection_string
 from dashboard.employee_views import normalized_location
 
@@ -55,6 +55,8 @@ class SqlEmployeeDirectory:
 
 
 def demo_directory(day):
+    from dashboard.attendance import demo_snapshot
+
     snapshot = demo_snapshot(day)
     employees = tuple(DirectoryEmployee(person.id,person.name,person.name,person.unit,
                       person.department,person.locations[0] if person.locations else None)
